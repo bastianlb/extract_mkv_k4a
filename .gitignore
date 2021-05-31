@@ -1,5 +1,8 @@
 cmake-build-release/
-build/
+build/*
+cmake/*
 .python-version
 ./data/*
 tmp/
+test_data/
+.ccls-cache/

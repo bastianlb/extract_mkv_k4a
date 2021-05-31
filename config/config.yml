@@ -1,0 +1,19 @@
+record:
+  first_frame: 0
+  last_frame: 6000
+  input_dir: "/storage/holistic_or"
+  feeds:
+    - "cn01/capture.mkv"
+    - "cn02/capture.mkv"
+    - "cn03/capture.mkv"
+    - "cn04/capture.mkv"
+    - "cn05/capture.mkv"
+    - "cn06/capture.mkv"
+  output:
+    - timestamp
+    - color
+    - depth
+      #    - infrared
+    - rgbd
+      #    - pointcloud
+  output_dir: "../test_data"

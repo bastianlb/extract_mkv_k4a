@@ -23,6 +23,9 @@ class ExportMKVConan(ConanFile):
         "corrade/2020.06@camposs/stable",
         "kinect-azure-sensor-sdk/1.4.1@camposs/stable",
         "bzip2/1.0.8@conan/stable",
+        "spdlog/1.8.2",
+        "yaml-cpp/0.6.3",
+        "tbb/2020.3",
          )
 
     default_options = {
