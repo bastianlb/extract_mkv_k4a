@@ -11,8 +11,6 @@
 #include <timesync.h>
 #include <extract_mkv_k4a.h>
 
-u_int8_t MAX_PARALLEL_JOBS = 8;
-
 using namespace extract_mkv;
 
 namespace extract_mkv {
@@ -25,7 +23,7 @@ namespace extract_mkv {
 
   void Timesynchronizer::initialize_feeds(std::vector<fs::path> input_paths, fs::path output_directory) {
       std::for_each(std::execution::par, input_paths.begin(), input_paths.end(),
-          [=](auto&& input_dir) {
+          [=, this](auto&& input_dir) {
           std::string feed_name = input_dir.parent_path().filename().string();
           spdlog::info("Initializing {0}", feed_name);
           // append the appropriate directory onto the output path, i.e. cn01 cn02 cn03..
@@ -70,14 +68,8 @@ namespace extract_mkv {
       }
   };
 
-  void Timesynchronizer::extract_frames(int frame_counter) {
+  void Timesynchronizer::extract_frames(std::shared_ptr<K4AFrameExtractor> feed, int frame_counter) {
       try {
-          // TODO: only parallelize when rgbd is exported
-          std::for_each(std::execution::par, m_input_feeds.begin(), m_input_feeds.end(),
-            [=](auto&& feed) {
-            // TODO: c++ counting semaphore to enable thread limit?
-            // kind of ugly to use mutex on k4a class..
-            std::scoped_lock lk(feed->lock);
             spdlog::info("Processing {0} : {1}", feed->m_name, frame_counter);
             if (m_export_depth) {
                 feed->process_depth(frame_counter);
@@ -98,8 +90,6 @@ namespace extract_mkv {
             if (m_export_pointcloud) {
                 feed->process_pointcloud(frame_counter);
             }
-          });
-
       } catch (const extract_mkv::MissingDataException& e) {
           spdlog::error("Error during playback: {0}", e.what());
       }
@@ -134,7 +124,11 @@ namespace extract_mkv {
               }
               spdlog::debug("Extract Frame: {0}", frame_counter);
 
-              extract_frames(frame_counter);
+              // TODO: only parallelize when rgbd is exported
+              std::for_each(std::execution::par, m_input_feeds.begin(), m_input_feeds.end(),
+                [=, this](auto&& feed) {
+                  extract_frames(feed, frame_counter);
+              });
 
               ++frame_counter;
 

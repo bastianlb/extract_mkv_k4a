@@ -3,7 +3,7 @@
 #include <sstream>              // Stringstreams
 #include <exception>
 #include <algorithm>
-#include <experimental/filesystem>
+#include <filesystem>
 
 #include <Corrade/configure.h>
 #include <Corrade/Utility/Arguments.h>
@@ -46,7 +46,7 @@
 
 #include <timesync.h>
 
-namespace fs = std::experimental::filesystem;
+namespace fs = std::filesystem;
 
 namespace Magnum {
 

@@ -1,5 +1,5 @@
 #include <iostream>             // Terminal IO
-#include <experimental/filesystem>
+#include <filesystem>
 
 #include <k4a/k4a.hpp>
 #include <k4arecord/playback.hpp>
@@ -15,7 +15,7 @@
 #include "extract_mkv_k4a.h"
 #include "transformation_helpers.h"
 
-namespace fs = std::experimental::filesystem;
+namespace fs = std::filesystem;
 
 namespace extract_mkv {
 

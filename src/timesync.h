@@ -4,14 +4,15 @@
 
 #include <extract_mkv_k4a.h>
 
-namespace extract_mkv {
-  class Timesynchronizer { 
 
-    public:
-      explicit Timesynchronizer(bool, bool, bool, bool, bool, bool, size_t, size_t);
+namespace extract_mkv {
+  const int MAX_PARALLEL_JOBS = 12;
+
+  class Timesynchronizer { 
+public: explicit Timesynchronizer(bool, bool, bool, bool, bool, bool, size_t, size_t);
       void initialize_feeds(std::vector<fs::path>, fs::path);
       void feed_forward(int);
-      void extract_frames(int);
+      void extract_frames(std::shared_ptr<K4AFrameExtractor>, int);
       void run();
 
     protected:
