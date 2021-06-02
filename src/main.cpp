@@ -166,10 +166,11 @@ namespace Magnum {
         Debug{} << "Core profile:" << GL::Context::current().isCoreProfile();
         Debug{} << "Context flags:" << GL::Context::current().flags();
 
-        extract_mkv::Timesynchronizer ts{m_export_color, m_export_depth,
-                                         m_export_infrared, m_export_rgbd,
-                                         m_export_pointcloud, m_export_timestamp,
-                                         m_first_frame, m_last_frame};
+        extract_mkv::ExportConfig export_config{m_export_timestamp,
+            m_export_color, m_export_depth, m_export_infrared, m_export_rgbd,
+            m_export_pointcloud};
+
+        extract_mkv::Timesynchronizer ts{m_first_frame, m_last_frame, export_config};
         ts.initialize_feeds(m_input_feeds, m_output_directory);
         ts.run();
         spdlog::info("Done.");

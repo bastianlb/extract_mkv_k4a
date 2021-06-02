@@ -15,12 +15,8 @@
 using namespace extract_mkv;
 
 namespace extract_mkv {
-  Timesynchronizer::Timesynchronizer(bool export_color, bool export_depth, bool export_infrared,
-                                     bool export_rgbd, bool export_pointcloud, bool export_timestamp,
-                                     size_t first_frame, size_t last_frame) :
-    m_export_color(export_color), m_export_depth(export_depth), m_export_infrared(export_infrared),
-    m_export_rgbd(export_rgbd), m_export_pointcloud(export_pointcloud), m_export_timestamp(export_timestamp),
-    m_first_frame(first_frame), m_last_frame(last_frame) {};
+  Timesynchronizer::Timesynchronizer(size_t first_frame, size_t last_frame, ExportConfig export_config) :
+    m_export_config(export_config), m_first_frame(first_frame), m_last_frame(last_frame) {};
 
   void Timesynchronizer::initialize_feeds(std::vector<fs::path> input_paths, fs::path output_directory) {
       std::for_each(std::execution::par, input_paths.begin(), input_paths.end(),
@@ -28,7 +24,7 @@ namespace extract_mkv {
           std::string feed_name = input_dir.parent_path().filename().string();
           spdlog::info("Initializing {0}", feed_name);
           // append the appropriate directory onto the output path, i.e. cn01 cn02 cn03..
-          auto frame_extractor = std::make_shared<K4AFrameExtractor>(input_dir, output_directory / feed_name, feed_name);
+          auto frame_extractor = std::make_shared<K4AFrameExtractor>(input_dir, output_directory / feed_name, feed_name, m_export_config);
           std::scoped_lock<std::mutex> guard(m_lock);
           m_input_feeds.push_back(frame_extractor);
       });
@@ -43,7 +39,7 @@ namespace extract_mkv {
 
   void Timesynchronizer::feed_forward(int frame_counter) {
       for (auto feed : m_input_feeds) {
-          feed->next_capture();
+          feed->next_capture(frame_counter);
       }
       while (true) {
         // fast forward until streams are in sync again
@@ -61,7 +57,7 @@ namespace extract_mkv {
             spdlog::warn("Frame: {0} - Feed {1} out of sync at {2}. Feed {3} is ahead at {4}, fast forward..",
                 frame_counter, feed->m_name, feed->m_last_depth_ts, first_feed->m_name, first_feed->m_last_depth_ts);
             break_cond = false;
-            feed->next_capture();
+            feed->next_capture(frame_counter);
           }
         }
         if (break_cond)
@@ -72,23 +68,23 @@ namespace extract_mkv {
   void Timesynchronizer::extract_frames(std::shared_ptr<K4AFrameExtractor> feed, int frame_counter) {
       try {
             spdlog::info("Processing {0} : {1}", feed->m_name, frame_counter);
-            if (m_export_depth) {
+            if (m_export_config.export_depth) {
                 feed->process_depth(frame_counter);
             }
 
-            if (m_export_color) {
+            if (m_export_config.export_color) {
                 feed->process_color(frame_counter);
             }
 
-            if (m_export_infrared) {
+            if (m_export_config.export_infrared) {
                 feed->process_ir(frame_counter);
             }
 
-            if (m_export_rgbd) {
+            if (m_export_config.export_rgbd) {
                 feed->process_rgbd(frame_counter);
             }
 
-            if (m_export_pointcloud) {
+            if (m_export_config.export_pointcloud) {
                 feed->process_pointcloud(frame_counter);
             }
       } catch (const extract_mkv::MissingDataException& e) {

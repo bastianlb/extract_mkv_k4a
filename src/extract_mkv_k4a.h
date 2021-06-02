@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>             // Terminal IO
+#include <fstream>
 #include <mutex>
 #include <filesystem>
 
@@ -22,13 +23,21 @@ namespace extract_mkv {
         }
     };
 
+    struct ExportConfig {
+      const bool export_timestamp{false};
+      const bool export_color{false};
+      const bool export_depth{false};
+      const bool export_infrared{false};
+      const bool export_rgbd{false};
+      const bool export_pointcloud{false};
+    };
+
     class K4AFrameExtractor {
         public:
-            K4AFrameExtractor(std::string, std::string, std::string);
+            K4AFrameExtractor(std::string, std::string, std::string, ExportConfig);
             ~K4AFrameExtractor();
 
-            void next_capture();
-            k4a::capture get_capture_handle();
+            void next_capture(int);
             uint8_t get_fps();
 
             int process_depth(int);
@@ -51,6 +60,7 @@ namespace extract_mkv {
             const fs::path m_output_directory;
             std::ostringstream m_tsss;
             fs::path m_timestamp_path;
-            bool m_export_timestamp;
+            std::ofstream m_timestamp_file;
+            ExportConfig m_export_config;
     };
 }

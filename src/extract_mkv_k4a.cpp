@@ -19,8 +19,10 @@ namespace fs = std::filesystem;
 
 namespace extract_mkv {
 
-    K4AFrameExtractor::K4AFrameExtractor(std::string input_filename, std::string output_directory, std::string feed_name) :
-        m_input_filename(fs::path(input_filename)), m_output_directory(fs::path(output_directory)), m_name(feed_name) {
+    K4AFrameExtractor::K4AFrameExtractor(std::string input_filename, std::string output_directory, 
+            std::string feed_name, ExportConfig export_config) :
+        m_input_filename(fs::path(input_filename)), m_output_directory(fs::path(output_directory)), 
+        m_name(feed_name), m_export_config(export_config) {
 
         fs::create_directories(output_directory);
 
@@ -34,19 +36,66 @@ namespace extract_mkv {
         print_calibration(m_calibration);
         save_calibration(m_calibration, m_output_directory);
 
-        /*if (m_export_pointcloud) {
+        if (export_config.export_pointcloud) {
             spdlog::debug("Set color conversion to BGRA32 for pointcloud export");
             m_dev.set_color_conversion(K4A_IMAGE_FORMAT_COLOR_BGRA32);
-        }*/
-        m_timestamp_path = fs::path(m_output_directory) / "timestamp.csv";
-        if (m_export_timestamp) {
-            m_tsss << "frameindex,depth_dts,depth_sts,color_dts,color_sts,infrared_dts,infrared_sts\n";
         }
-        /* record frameindex
-        tsss.str("");
-        tsss.clear();
-        tsss << std::to_string(frame_counter) << ",";
-        */
+
+        if (m_export_config.export_timestamp) {
+            m_timestamp_path = fs::path(m_output_directory) / "timestamp.csv";
+            m_timestamp_file.open(m_timestamp_path.c_str(), std::ios::out);
+            m_tsss << "frameindex,";
+            if (m_export_config.export_depth) {
+                m_tsss << "depth_dts,depth_sts,";
+
+            }
+            if (m_export_config.export_depth) {
+                m_tsss << "color_dts,color_sts,";
+
+            }
+            if (m_export_config.export_depth) {
+                m_tsss << "infrared_dts,infrared_sts";
+            }
+            m_timestamp_file << m_tsss.str() << std::endl;
+        }
+    }
+
+    K4AFrameExtractor::~K4AFrameExtractor() {
+        m_dev.close();
+    }
+
+    void K4AFrameExtractor::next_capture(int frame_counter) {
+        m_tsss.str("");
+        m_tsss.clear();
+        m_dev.get_next_capture(&m_capture);
+        const k4a::image depth_image = m_capture.get_depth_image();
+        if (depth_image)
+            m_last_depth_ts = depth_image.get_device_timestamp().count();
+        else
+            m_last_depth_ts = -10e6;
+        const k4a::image color_image = m_capture.get_depth_image();
+        if (color_image)
+            m_last_color_ts = color_image.get_device_timestamp().count();
+        else
+            m_last_color_ts = -10e6;
+        if (m_export_config.export_timestamp) {
+            m_tsss << std::to_string(frame_counter) << ",";
+            if (m_export_config.export_depth) {
+                int depth_system_ts = depth_image.get_system_timestamp().count();
+                m_tsss << m_last_depth_ts << "," << depth_system_ts << ",";
+            }
+            if (m_export_config.export_depth) {
+                int color_system_ts = depth_image.get_system_timestamp().count();
+                m_tsss << m_last_color_ts << "," << color_system_ts << ",";
+            }
+            if (m_export_config.export_depth) {
+                const k4a::image ir_image = m_capture.get_ir_image();
+                int ir_device_ts = ir_image.get_device_timestamp().count();
+                int ir_system_ts = ir_image.get_system_timestamp().count();
+                m_tsss << ir_device_ts << "," << ir_system_ts << ",";
+            }
+            m_timestamp_file << m_tsss.str() << std::endl;
+        }
     }
 
     uint8_t K4AFrameExtractor::get_fps() {
@@ -63,29 +112,6 @@ namespace extract_mkv {
             throw 1;
             return -1;
         }
-    }
-
-    void K4AFrameExtractor::next_capture() {
-        m_dev.get_next_capture(&m_capture);
-        const k4a::image depth_image = m_capture.get_depth_image();
-        if (depth_image)
-            m_last_depth_ts = depth_image.get_device_timestamp().count();
-        else
-            m_last_depth_ts = -10e6;
-        const k4a::image color_image = m_capture.get_depth_image();
-        if (color_image)
-            m_last_color_ts = color_image.get_device_timestamp().count();
-        else
-            m_last_color_ts = -10e6;
-    }
-
-
-    k4a::capture K4AFrameExtractor::get_capture_handle() {
-        return m_capture;
-    }
-
-    K4AFrameExtractor::~K4AFrameExtractor() {
-        m_dev.close();
     }
 
     int K4AFrameExtractor::process_depth(int frame_counter) {
