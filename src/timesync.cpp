@@ -1,6 +1,7 @@
 #include <execution>
 #include <tbb/tbb.h>
 #include <spdlog/spdlog.h>
+#include <future>
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -105,13 +106,13 @@ namespace extract_mkv {
 
       // now export frames
       int frame_counter{0};
-      /* TODO: write only relevant headers.
-       * if (m_capture_timestamps) {
-        m_tsss << "frameindex,depth_dts,depth_sts,color_dts,color_sts,infrared_dts,infrared_sts\n";
-      }*/
+      int wait_count{0};
+      std::thread t;
 
       while (true) {
           try {
+
+              // feed forward happens in sync.. processing does not.
               feed_forward(frame_counter);
 
               if (frame_counter < m_first_frame) {
@@ -124,11 +125,22 @@ namespace extract_mkv {
               }
               spdlog::debug("Extract Frame: {0}", frame_counter);
 
-              // TODO: only parallelize when rgbd is exported
-              std::for_each(std::execution::par, m_input_feeds.begin(), m_input_feeds.end(),
-                [=, this](auto&& feed) {
-                  extract_frames(feed, frame_counter);
-              });
+              // TODO: only parallelize when rgbd is exported?
+              for (auto feed : m_input_feeds) {
+                m_sem.wait();
+                std::scoped_lock worker_lock(m_lock);
+                m_worker_threads.push_back(std::thread([=, this]
+                  (std::shared_ptr<K4AFrameExtractor> feed, const int frame_counter) {
+                    spdlog::debug("Initializing worker thread for {0} - {1}", feed->m_name, frame_counter); 
+                    this->extract_frames(feed, frame_counter);
+                    m_sem.notify();
+                    // TODO: this is ugly way to clean up threads, maybe we want to
+                    // use an async monitor based approach.. and check if they are done.
+                    std::thread([=, this] (std::thread::id thread_id) {
+                        this->remove_thread(thread_id);
+                    }, std::this_thread::get_id()).detach();
+                }, feed, frame_counter));
+              }
 
               ++frame_counter;
 
@@ -141,6 +153,18 @@ namespace extract_mkv {
                   exit(1);
               }
           }
+      }
+  }
+
+  void Timesynchronizer::remove_thread(std::thread::id id) {
+      spdlog::debug("Clean up thread"); 
+      std::lock_guard<std::mutex> lock(m_lock);
+      auto iter = std::find_if(m_worker_threads.begin(), m_worker_threads.end(),
+          [=](std::thread &t) { return (t.get_id() == id); });
+      if (iter != m_worker_threads.end())
+      {
+          iter->join();
+          m_worker_threads.erase(iter);
       }
   }
 }

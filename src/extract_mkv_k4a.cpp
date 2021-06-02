@@ -39,6 +39,9 @@ namespace extract_mkv {
             m_dev.set_color_conversion(K4A_IMAGE_FORMAT_COLOR_BGRA32);
         }*/
         m_timestamp_path = fs::path(m_output_directory) / "timestamp.csv";
+        if (m_export_timestamp) {
+            m_tsss << "frameindex,depth_dts,depth_sts,color_dts,color_sts,infrared_dts,infrared_sts\n";
+        }
         /* record frameindex
         tsss.str("");
         tsss.clear();

@@ -51,5 +51,6 @@ namespace extract_mkv {
             const fs::path m_output_directory;
             std::ostringstream m_tsss;
             fs::path m_timestamp_path;
+            bool m_export_timestamp;
     };
 }

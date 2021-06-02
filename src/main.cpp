@@ -173,6 +173,7 @@ namespace Magnum {
         ts.initialize_feeds(m_input_feeds, m_output_directory);
         ts.run();
         spdlog::info("Done.");
+        exit(0);
         return 0;
     }
 }
