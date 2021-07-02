@@ -5,6 +5,7 @@
 #include <k4arecord/playback.hpp>
 
 #include <spdlog/spdlog.h>
+#include <json/json.h>
 
 #include <Corrade/Utility/Directory.h>
 #include <Corrade/Containers/ArrayView.h>
@@ -13,7 +14,7 @@
 #include <opencv2/imgcodecs.hpp>   // Include OpenCV API
 
 #include "extract_mkv_k4a.h"
-#include "transformation_helpers.h"
+#include "distortion.h"
 
 namespace fs = std::filesystem;
 
@@ -25,18 +26,16 @@ namespace extract_mkv {
         m_name(feed_name), m_export_config(export_config) {
 
         fs::create_directories(output_directory);
-
         m_dev = k4a::playback::open(m_input_filename.c_str());
 
         m_dev_config = m_dev.get_record_configuration();
-
         m_calibration = m_dev.get_calibration();
 
         // store calibration
         print_calibration(m_calibration);
         save_calibration(m_calibration, m_output_directory);
 
-        if (export_config.export_pointcloud) {
+        if (export_config.export_pointcloud){
             spdlog::debug("Set color conversion to BGRA32 for pointcloud export");
             m_dev.set_color_conversion(K4A_IMAGE_FORMAT_COLOR_BGRA32);
         }
@@ -45,18 +44,55 @@ namespace extract_mkv {
             m_timestamp_path = fs::path(m_output_directory) / "timestamp.csv";
             m_timestamp_file.open(m_timestamp_path.c_str(), std::ios::out);
             m_tsss << "frameindex,";
-            if (m_export_config.export_depth) {
-                m_tsss << "depth_dts,depth_sts,";
-
-            }
-            if (m_export_config.export_depth) {
-                m_tsss << "color_dts,color_sts,";
-
-            }
+            m_tsss << "depth_dts,depth_sts,";
+            m_tsss << "color_dts,color_sts,";
             if (m_export_config.export_depth) {
                 m_tsss << "infrared_dts,infrared_sts";
             }
             m_timestamp_file << m_tsss.str() << std::endl;
+        }
+        if (m_export_config.align_clouds) {
+            fs::path extrinsic_path = m_input_filename.parent_path() / "world2camera.json";
+            std::ifstream ifs { extrinsic_path.c_str() };
+            if (!ifs.is_open()) {
+                spdlog::error("Could not find extrinsics for feed {0}", m_name);
+                throw MissingDataException();
+            }
+            Json::Value doc;   // will contains the root value after parsing.
+            Json::CharReaderBuilder builder;
+            std::string errs;
+            bool ok = Json::parseFromStream(builder, ifs, &doc, &errs);
+            if ( !ok ) {
+                spdlog::error("Could not parse extrinsics for feed {0}: {1}", m_name, errs);
+                throw MissingDataException();
+            }
+            const Json::Value root = doc["value0"];
+            const Json::Value rot = root["rotation"];
+            const Json::Value trans = root["translation"];
+            if (!root || !rot || !trans) {
+                spdlog::error("Missing extrinsics for feed {0}", m_name);
+                throw MissingDataException();
+            }
+            spdlog::info("Loaded extrinsic calibration file for feed {0}", m_name);
+            Eigen::Quaternionf q{rot["w"].asFloat(), rot["x"].asFloat(), rot["y"].asFloat(), rot["z"].asFloat()};
+            Eigen::Vector3f t{trans["m00"].asFloat(), trans["m10"].asFloat(), trans["m20"].asFloat()};
+            Eigen::Matrix4f transform = Eigen::Matrix4f::Identity();
+            transform.block<3, 3>(0, 0) = q.toRotationMatrix();
+            transform.block<3, 1>(0, 3) = t;
+
+            // flip y and z from opengl to opencv convention
+            Eigen::Matrix4f yz_transform = Eigen::Matrix4f::Identity();
+            yz_transform(1,1) = -1.0;
+            yz_transform(2,2) = -1.0;
+            transform = (yz_transform * transform * yz_transform);
+            // flip back to a convention where Z is up.
+            Eigen::Matrix4f swap_y_z = Eigen::Matrix4f::Zero();
+            swap_y_z(0, 0) = 1;
+            swap_y_z(1, 2) = -1;
+            swap_y_z(2, 1) = -1;
+            swap_y_z(3, 3) = 1;
+            transform = swap_y_z * transform;
+            m_extrinsics.matrix() = transform;
         }
     }
 
@@ -80,15 +116,12 @@ namespace extract_mkv {
             m_last_color_ts = -10e6;
         if (m_export_config.export_timestamp) {
             m_tsss << std::to_string(frame_counter) << ",";
-            if (m_export_config.export_depth) {
-                int depth_system_ts = depth_image.get_system_timestamp().count();
-                m_tsss << m_last_depth_ts << "," << depth_system_ts << ",";
-            }
-            if (m_export_config.export_depth) {
-                int color_system_ts = depth_image.get_system_timestamp().count();
-                m_tsss << m_last_color_ts << "," << color_system_ts << ",";
-            }
-            if (m_export_config.export_depth) {
+            int depth_system_ts = depth_image.get_system_timestamp().count();
+            m_tsss << m_last_depth_ts << "," << depth_system_ts << ",";
+            int color_system_ts = depth_image.get_system_timestamp().count();
+            m_tsss << m_last_color_ts << "," << color_system_ts << ",";
+            // don't include IR timestamp export by default
+            if (m_export_config.export_infrared) {
                 const k4a::image ir_image = m_capture.get_ir_image();
                 int ir_device_ts = ir_image.get_device_timestamp().count();
                 int ir_system_ts = ir_image.get_system_timestamp().count();
@@ -116,8 +149,8 @@ namespace extract_mkv {
 
     int K4AFrameExtractor::process_depth(int frame_counter) {
         const k4a::image input_depth_image = m_capture.get_depth_image();
+        uint timestamp = input_depth_image.get_system_timestamp().count();
         if (input_depth_image) {
-
             int w = input_depth_image.get_width_pixels();
             int h = input_depth_image.get_height_pixels();
 
@@ -125,7 +158,6 @@ namespace extract_mkv {
                 cv::Mat image_buffer = cv::Mat(cv::Size(w, h), CV_16UC1,
                                                const_cast<void *>(static_cast<const void *>(input_depth_image.get_buffer())),
                                                static_cast<size_t>(input_depth_image.get_stride_bytes()));
-                uint timestamp = input_depth_image.get_system_timestamp().count();
 
                 std::ostringstream ss;
                 ss << std::setw(10) << std::setfill('0') << frame_counter << "_depth.tiff";
@@ -136,7 +168,7 @@ namespace extract_mkv {
                 spdlog::warn("Received depth frame with unexpected format: {0}", input_depth_image.get_format());
                 throw MissingDataException();
             }
-            return input_depth_image.get_device_timestamp().count();
+            return (int)timestamp;
         } else {
             return -1;
         }
@@ -262,18 +294,23 @@ namespace extract_mkv {
 
     void K4AFrameExtractor::process_pointcloud(int frame_counter) {
 
+        spdlog::info("In process pointcloud");
         const k4a::image input_depth_image = m_capture.get_depth_image();
         const k4a::image input_color_image = m_capture.get_color_image();
         int color_image_width_pixels = k4a_image_get_width_pixels(input_color_image.handle());
         int color_image_height_pixels = k4a_image_get_height_pixels(input_color_image.handle());
+        spdlog::info("aaa");
 
         k4a_transformation_t transformation = k4a_transformation_create(&m_calibration);
+        spdlog::info("bbb");
         // transform color image into depth camera geometry
         int depth_image_width_pixels = k4a_image_get_width_pixels(m_capture.get_depth_image().handle());
         int depth_image_height_pixels = k4a_image_get_height_pixels(m_capture.get_depth_image().handle());
+        spdlog::info("ccc");
         k4a_image_t transformed_color_image = NULL;
         k4a::image color_image;
         cv::Mat result;
+        spdlog::info("Done initializing pointcloud");
 
 
         if (input_color_image.get_format() == K4A_IMAGE_FORMAT_COLOR_BGRA32) {
@@ -297,8 +334,6 @@ namespace extract_mkv {
                         m_capture.get_color_image().get_format());
             throw MissingDataException();
         }
-
-
 
         if (K4A_RESULT_SUCCEEDED != k4a_image_create(K4A_IMAGE_FORMAT_COLOR_BGRA32,
                                                      depth_image_width_pixels,
@@ -337,11 +372,18 @@ namespace extract_mkv {
             throw MissingDataException();
         }
 
-        std::ostringstream ss;
-        ss << std::setw(10) << std::setfill('0') << frame_counter << "_pointcloud.ply";
-        fs::path ply_path = m_output_directory / ss.str();
+        // TODO: use PCL? remove null points?
+        std::vector<color_point_t> points = image_to_pointcloud(point_cloud_image, transformed_color_image);
+        if (m_export_config.align_clouds) {
+            for (auto &point : points) {
+                point.xyz = m_extrinsics * point.xyz;
+            }
+        }
 
-        tranformation_helpers_write_point_cloud(point_cloud_image, transformed_color_image, ply_path.c_str());
+        std::ostringstream ss;
+        ss << std::setw(4) << std::setfill('0') << frame_counter << "_" << m_name << "_pointcloud.ply";
+        fs::path ply_path = m_output_directory / ss.str();
+        tranformation_helpers_write_point_cloud(points, ply_path.c_str());
 
         k4a_image_release(transformed_color_image);
         k4a_image_release(point_cloud_image);

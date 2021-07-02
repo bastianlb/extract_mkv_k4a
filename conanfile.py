@@ -19,6 +19,7 @@ class ExportMKVConan(ConanFile):
 
     requires = (
         "opencv/4.5.0@camposs/stable",
+        "eigen/[3.3.9]@camposs/stable",
         "magnum/2020.06@camposs/stable",
         "corrade/2020.06@camposs/stable",
         "kinect-azure-sensor-sdk/1.4.1@camposs/stable",
@@ -26,6 +27,7 @@ class ExportMKVConan(ConanFile):
         "spdlog/1.8.2",
         "yaml-cpp/0.6.3",
         "tbb/2020.3",
+        "jsoncpp/1.9.4"
          )
 
     default_options = {

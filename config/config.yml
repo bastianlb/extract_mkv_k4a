@@ -1,19 +1,20 @@
 record:
-  first_frame: 0 
-  last_frame: 4000
+  first_frame: 500 
+  last_frame: 8000
   input_dir: "/storage/holistic_or"
   feeds:
-    - "cn01/capture_cn01_take1.mkv"
-    - "cn02/capture_cn02_take1.mkv"
-    - "cn03/capture_cn03_take1.mkv"
-    - "cn04/capture_cn04_take1.mkv"
-      # - "cn05/capture_cn05_take2.mkv"
-      # - "cn06/capture_cn06_take2.mkv"
+    - "cn01/capture_cn01_take2.mkv"
+    - "cn02/capture_cn02_take2.mkv"
+    - "cn03/capture_cn03_take2.mkv"
+    - "cn04/capture_cn04_take2.mkv"
+    - "cn05/capture_cn05_take2.mkv"
+    - "cn06/capture_cn06_take2.mkv"
   output:
     - timestamp
     - color
     - depth
       #    - infrared
     - rgbd
-      #    - pointcloud
-  output_dir: "../test_data"
+      # - pointcloud
+    - fused_pointcloud
+  output_dir: "../export_take_2"

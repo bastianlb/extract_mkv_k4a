@@ -62,12 +62,8 @@ namespace Magnum {
         size_t m_first_frame{0};
         size_t m_last_frame{0};
 
-        bool m_export_timestamp{false};
-        bool m_export_color{false};
-        bool m_export_depth{false};
-        bool m_export_infrared{false};
-        bool m_export_pointcloud{false};
-        bool m_export_rgbd{false};
+        extract_mkv::ExportConfig m_export_config{};
+        bool m_timesync{false};
 
         fs::path m_input_directory;
         fs::path m_output_directory;
@@ -121,20 +117,23 @@ namespace Magnum {
 
         for (YAML::const_iterator it=output.begin(); it!=output.end(); ++it) {
           if (it->as<std::string>() == "timestamp")
-            m_export_timestamp = true;
+            m_export_config.export_timestamp = true;
           else if (it->as<std::string>() == "color")
-            m_export_color = true;
+            m_export_config.export_color = true;
           else if (it->as<std::string>() == "depth")
-            m_export_depth = true;
+            m_export_config.export_depth = true;
           else if (it->as<std::string>() == "infrared")
-            m_export_infrared = true;
+            m_export_config.export_infrared = true;
           else if (it->as<std::string>() == "rgbd")
-            m_export_rgbd = true;
+            m_export_config.export_rgbd = true;
           else if (it->as<std::string>() == "pointcloud")
-            m_export_pointcloud = true;
+            m_export_config.export_pointcloud = true;
+          else if (it->as<std::string>() == "align_clouds")
+            m_export_config.align_clouds= true;
           else
             spdlog::error("Invalid export type: [{0}].", it->as<std::string>());
         }
+
 
         m_input_directory = fs::path(recording_config["input_dir"].as<std::string>());
         m_output_directory = fs::path(recording_config["output_dir"].as<std::string>());
@@ -159,6 +158,9 @@ namespace Magnum {
           }
           m_input_feeds.push_back(input_feed);
         }
+
+        YAML::Node m_timesync = config["timesync"];
+
         spdlog::info("Successfully parsed configuration.");
     }
 
@@ -166,11 +168,7 @@ namespace Magnum {
         Debug{} << "Core profile:" << GL::Context::current().isCoreProfile();
         Debug{} << "Context flags:" << GL::Context::current().flags();
 
-        extract_mkv::ExportConfig export_config{m_export_timestamp,
-            m_export_color, m_export_depth, m_export_infrared, m_export_rgbd,
-            m_export_pointcloud};
-
-        extract_mkv::Timesynchronizer ts{m_first_frame, m_last_frame, export_config};
+        extract_mkv::Timesynchronizer ts{m_first_frame, m_last_frame, m_export_config, m_timesync};
         ts.initialize_feeds(m_input_feeds, m_output_directory);
         ts.run();
         spdlog::info("Done.");

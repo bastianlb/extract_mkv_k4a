@@ -6,23 +6,15 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
-
 #include <vector>
 
-struct color_point_t
-{
-    int16_t xyz[3];
-    uint8_t rgb[3];
-};
 
-void tranformation_helpers_write_point_cloud(const k4a_image_t point_cloud_image,
-                                             const k4a_image_t color_image,
-                                             const char *file_name)
-{
+std::vector<color_point_t> image_to_pointcloud(const k4a_image_t point_cloud_image,
+                                             const k4a_image_t color_image) {
     std::vector<color_point_t> points;
-
     int width = k4a_image_get_width_pixels(point_cloud_image);
     int height = k4a_image_get_height_pixels(color_image);
+    points.reserve(width * height);
 
     int16_t *point_cloud_image_data = (int16_t *)(void *)k4a_image_get_buffer(point_cloud_image);
     uint8_t *color_image_data = k4a_image_get_buffer(color_image);
@@ -30,26 +22,32 @@ void tranformation_helpers_write_point_cloud(const k4a_image_t point_cloud_image
     for (int i = 0; i < width * height; i++)
     {
         color_point_t point;
-        point.xyz[0] = point_cloud_image_data[3 * i + 0];
-        point.xyz[1] = point_cloud_image_data[3 * i + 1];
-        point.xyz[2] = point_cloud_image_data[3 * i + 2];
-//        if (point.xyz[2] == 0)
-//        {
-//            continue;
-//        }
+        point.xyz[0] = (float)point_cloud_image_data[3 * i + 0] / 1000;
+        point.xyz[1] = (float)point_cloud_image_data[3 * i + 1] / 1000;
+        point.xyz[2] = (float)point_cloud_image_data[3 * i + 2] / 1000;
+        if (point.xyz[2] == 0)
+        {
+            continue;
+        }
 
         point.rgb[0] = color_image_data[4 * i + 0];
         point.rgb[1] = color_image_data[4 * i + 1];
         point.rgb[2] = color_image_data[4 * i + 2];
         uint8_t alpha = color_image_data[4 * i + 3];
 
-//        if (point.rgb[0] == 0 && point.rgb[1] == 0 && point.rgb[2] == 0 && alpha == 0)
-//        {
-//            continue;
-//        }
+        if (point.rgb[0] == 0 && point.rgb[1] == 0 && point.rgb[2] == 0 && alpha == 0)
+        {
+            continue;
+        }
 
         points.push_back(point);
     }
+    return points;
+}
+
+void tranformation_helpers_write_point_cloud(std::vector<color_point_t> points,
+                                             const char *file_name)
+{
 
 #define PLY_START_HEADER "ply"
 #define PLY_END_HEADER "end_header"
@@ -74,7 +72,7 @@ void tranformation_helpers_write_point_cloud(const k4a_image_t point_cloud_image
     for (size_t i = 0; i < points.size(); ++i)
     {
         // image data is BGR
-        ss << (float)points[i].xyz[0] / 1000. << " " << (float)points[i].xyz[1] / 1000. << " " << (float)points[i].xyz[2] / 1000.;
+        ss << points[i].xyz[0] << " " << points[i].xyz[1] << " " << points[i].xyz[2];
         ss << " " << (float)points[i].rgb[2] << " " << (float)points[i].rgb[1] << " " << (float)points[i].rgb[0];
         ss << std::endl;
     }

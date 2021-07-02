@@ -19,6 +19,7 @@ set_target_properties(${TARGET_NAME} PROPERTIES LINKER_LANGUAGE CXX)
 
 target_link_libraries(${TARGET_NAME} PRIVATE
         CONAN_PKG::opencv
+        CONAN_PKG::eigen
         CONAN_PKG::magnum
         CONAN_PKG::corrade
         CONAN_PKG::kinect-azure-sensor-sdk
@@ -26,6 +27,7 @@ target_link_libraries(${TARGET_NAME} PRIVATE
         CONAN_PKG::spdlog
         CONAN_PKG::yaml-cpp
         CONAN_PKG::tbb
+        CONAN_PKG::jsoncpp
         )
 
 

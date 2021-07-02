@@ -2,8 +2,20 @@
 // Licensed under the MIT License.
 
 #pragma once
+
+#include <vector>
+
+#include <Eigen/Geometry>
 #include <k4a/k4a.h>
 
-void tranformation_helpers_write_point_cloud(const k4a_image_t point_cloud_image,
-                                             const k4a_image_t color_image,
+struct color_point_t
+{
+    Eigen::Vector3f xyz;
+    uint8_t rgb[3];
+};
+
+std::vector<color_point_t> image_to_pointcloud(const k4a_image_t point_cloud_image,
+                                             const k4a_image_t color_image);
+
+void tranformation_helpers_write_point_cloud(std::vector<color_point_t> points,
                                              const char *file_name);

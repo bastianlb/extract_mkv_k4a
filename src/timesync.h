@@ -40,7 +40,7 @@ namespace extract_mkv {
   };
 
   class Timesynchronizer { 
-public: explicit Timesynchronizer(size_t, size_t, ExportConfig);
+public: explicit Timesynchronizer(size_t, size_t, ExportConfig, bool);
       void initialize_feeds(std::vector<fs::path>, fs::path);
       void feed_forward(int);
       void extract_frames(std::shared_ptr<K4AFrameExtractor>, int);
@@ -54,6 +54,7 @@ public: explicit Timesynchronizer(size_t, size_t, ExportConfig);
       const size_t m_last_frame;
       float m_sync_window;
 
+      bool m_use_timesync;
       ExportConfig m_export_config;
 
       std::mutex m_lock;

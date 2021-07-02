@@ -15,8 +15,8 @@
 using namespace extract_mkv;
 
 namespace extract_mkv {
-  Timesynchronizer::Timesynchronizer(size_t first_frame, size_t last_frame, ExportConfig export_config) :
-    m_export_config(export_config), m_first_frame(first_frame), m_last_frame(last_frame) {};
+  Timesynchronizer::Timesynchronizer(size_t first_frame, size_t last_frame, ExportConfig export_config, bool timesync) :
+    m_export_config(export_config), m_first_frame(first_frame), m_last_frame(last_frame), m_use_timesync(timesync) {};
 
   void Timesynchronizer::initialize_feeds(std::vector<fs::path> input_paths, fs::path output_directory) {
       std::for_each(std::execution::par, input_paths.begin(), input_paths.end(),
@@ -40,6 +40,9 @@ namespace extract_mkv {
   void Timesynchronizer::feed_forward(int frame_counter) {
       for (auto feed : m_input_feeds) {
           feed->next_capture(frame_counter);
+      }
+      if (!m_use_timesync) {
+        return;
       }
       while (true) {
         // fast forward until streams are in sync again
@@ -85,17 +88,12 @@ namespace extract_mkv {
             }
 
             if (m_export_config.export_pointcloud) {
+                spdlog::info("Extracting pointcloud");
                 feed->process_pointcloud(frame_counter);
             }
       } catch (const extract_mkv::MissingDataException& e) {
           spdlog::error("Error during playback: {0}", e.what());
       }
-
-      /*tsss << "\n";
-      if (m_export_timestamp) {
-          Corrade::Utility::Directory::appendString(timestamp_path, tsss.str());
-      }*/
-
   }
 
   void Timesynchronizer::run() {
@@ -123,6 +121,8 @@ namespace extract_mkv {
 
               // TODO: only parallelize when rgbd is exported?
               for (auto feed : m_input_feeds) {
+                extract_frames(feed, frame_counter);
+                /*
                 m_sem.wait();
                 std::scoped_lock worker_lock(m_lock);
                 m_worker_threads.push_back(std::thread([=, this]
@@ -135,7 +135,7 @@ namespace extract_mkv {
                     std::thread([=, this] (std::thread::id thread_id) {
                         this->remove_thread(thread_id);
                     }, std::this_thread::get_id()).detach();
-                }, feed, frame_counter));
+                }, feed, frame_counter));*/
               }
 
               ++frame_counter;

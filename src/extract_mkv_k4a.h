@@ -5,8 +5,12 @@
 #include <mutex>
 #include <filesystem>
 
+#include <Eigen/Geometry>
+
 #include <k4a/k4a.hpp>
 #include <k4arecord/playback.hpp>
+
+#include "transformation_helpers.h"
 
 namespace fs = std::filesystem;
 
@@ -24,12 +28,13 @@ namespace extract_mkv {
     };
 
     struct ExportConfig {
-      const bool export_timestamp{false};
-      const bool export_color{false};
-      const bool export_depth{false};
-      const bool export_infrared{false};
-      const bool export_rgbd{false};
-      const bool export_pointcloud{false};
+      bool export_timestamp{false};
+      bool export_color{false};
+      bool export_depth{false};
+      bool export_infrared{false};
+      bool export_rgbd{false};
+      bool export_pointcloud{false};
+      bool align_clouds{false};
     };
 
     class K4AFrameExtractor {
@@ -50,8 +55,9 @@ namespace extract_mkv {
             double m_last_color_ts;
             double m_last_depth_ts;
             std::mutex lock;
+            Eigen::Affine3f m_extrinsics = Eigen::Affine3f::Identity();
 
-        private:
+        protected:
             k4a::playback m_dev;
             k4a::capture m_capture;
             k4a_record_configuration_t m_dev_config;
