@@ -16,9 +16,6 @@ namespace fs = std::filesystem;
 
 namespace extract_mkv {
 
-    static void print_calibration(k4a_calibration_t&);
-    void save_calibration(k4a_calibration_t, fs::path);
-
     struct MissingDataException : public std::exception
     {
       const char * what () const throw ()
@@ -37,6 +34,16 @@ namespace extract_mkv {
       bool align_clouds{false};
     };
 
+    struct RectifyMaps {
+        cv::Mat depth_map_x;
+        cv::Mat depth_map_y;
+        cv::Mat color_map_x;
+        cv::Mat color_map_y;
+    };
+
+    static void print_raw_calibration(k4a_calibration_t&);
+    RectifyMaps process_calibration(k4a_calibration_t, fs::path);
+
     class K4AFrameExtractor {
         public:
             K4AFrameExtractor(std::string, std::string, std::string, ExportConfig);
@@ -50,6 +57,7 @@ namespace extract_mkv {
             int process_ir(int);
             void process_rgbd(int);
             void process_pointcloud(int);
+            void compute_undistortion_intrinsics();
 
             std::string m_name;
             double m_last_color_ts;
@@ -68,5 +76,6 @@ namespace extract_mkv {
             fs::path m_timestamp_path;
             std::ofstream m_timestamp_file;
             ExportConfig m_export_config;
+            RectifyMaps m_rectify_maps;
     };
 }

@@ -8,7 +8,6 @@
 #include <sstream>
 #include <vector>
 
-
 std::vector<color_point_t> image_to_pointcloud(const k4a_image_t point_cloud_image,
                                              const k4a_image_t color_image) {
     std::vector<color_point_t> points;
@@ -78,4 +77,59 @@ void tranformation_helpers_write_point_cloud(std::vector<color_point_t> points,
     }
     std::ofstream ofs_text(file_name, std::ios::out | std::ios::app);
     ofs_text.write(ss.str().c_str(), (std::streamsize)ss.str().length());
+}
+
+cv::Size get_camera_depth_resolution(k4a_depth_mode_t depth_mode) {
+    int width;
+    int height;
+    switch (depth_mode) {
+        case K4A_DEPTH_MODE_OFF:
+            width = 0; height = 0;
+            break;
+        case K4A_DEPTH_MODE_NFOV_2X2BINNED:
+            width = 320; height = 288;
+            break;
+        case K4A_DEPTH_MODE_NFOV_UNBINNED:
+            width = 640; height = 576;
+            break;
+        case K4A_DEPTH_MODE_WFOV_2X2BINNED:
+            width = 512; height = 512;
+            break;
+        case K4A_DEPTH_MODE_WFOV_UNBINNED:
+            width = 1024; height = 1024;
+            break;
+        case K4A_DEPTH_MODE_PASSIVE_IR:
+            width = 1024; height = 1024;
+            break;
+    }
+    return cv::Size(width, height);
+}
+
+cv::Size get_camera_color_resolution(k4a_color_resolution_t color_mode) {
+    int width;
+    int height;
+    switch (color_mode) {
+        case K4A_COLOR_RESOLUTION_OFF:
+            width = 0; height = 0;
+            break;
+        case K4A_COLOR_RESOLUTION_720P:
+            width = 1280; height = 720;
+            break;
+        case K4A_COLOR_RESOLUTION_1080P:
+            width = 1920; height = 1080;
+            break;
+        case K4A_COLOR_RESOLUTION_1440P:
+            width = 2560; height = 1440;
+            break;
+        case K4A_COLOR_RESOLUTION_1536P:
+            width = 2048; height = 1536;
+            break;
+        case K4A_COLOR_RESOLUTION_2160P:
+            width = 3840; height = 2160;
+            break;
+        case K4A_COLOR_RESOLUTION_3072P:
+            width = 4096; height = 3072;
+            break;
+    }
+    return cv::Size(width, height);
 }

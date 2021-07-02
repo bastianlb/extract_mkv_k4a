@@ -10,11 +10,10 @@
 #include <Corrade/Utility/Directory.h>
 #include <Corrade/Containers/ArrayView.h>
 
-#include <opencv2/opencv.hpp>   // Include OpenCV API
-#include <opencv2/imgcodecs.hpp>   // Include OpenCV API
+#include <opencv2/opencv.hpp>
+#include <opencv2/imgcodecs.hpp>
 
 #include "extract_mkv_k4a.h"
-#include "distortion.h"
 
 namespace fs = std::filesystem;
 
@@ -32,8 +31,8 @@ namespace extract_mkv {
         m_calibration = m_dev.get_calibration();
 
         // store calibration
-        print_calibration(m_calibration);
-        save_calibration(m_calibration, m_output_directory);
+        print_raw_calibration(m_calibration);
+        m_rectify_maps = process_calibration(m_calibration, m_output_directory);
 
         if (export_config.export_pointcloud){
             spdlog::debug("Set color conversion to BGRA32 for pointcloud export");
@@ -158,12 +157,17 @@ namespace extract_mkv {
                 cv::Mat image_buffer = cv::Mat(cv::Size(w, h), CV_16UC1,
                                                const_cast<void *>(static_cast<const void *>(input_depth_image.get_buffer())),
                                                static_cast<size_t>(input_depth_image.get_stride_bytes()));
-
+                cv::Mat undistorted_image;
+                cv::remap(image_buffer, undistorted_image, m_rectify_maps.depth_map_x,
+                          m_rectify_maps.depth_map_y, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
                 std::ostringstream ss;
                 ss << std::setw(10) << std::setfill('0') << frame_counter << "_depth.tiff";
                 std::string image_path = m_output_directory / ss.str();
+                cv::imwrite(image_path, undistorted_image);
+                std::ostringstream s;
+                s << std::setw(10) << std::setfill('0') << frame_counter << "_undistorted_depth.tiff";
+                image_path = m_output_directory / s.str();
                 cv::imwrite(image_path, image_buffer);
-
             } else {
                 spdlog::warn("Received depth frame with unexpected format: {0}", input_depth_image.get_format());
                 throw MissingDataException();
@@ -178,40 +182,55 @@ namespace extract_mkv {
         const k4a::image input_color_image = m_capture.get_color_image();
         {
             if (input_color_image) {
+                cv::Mat undistorted_image;
 
                 int w = input_color_image.get_width_pixels();
                 int h = input_color_image.get_height_pixels();
 
                 cv::Mat image_buffer;
-                uint timestamp;
+                uint timestamp = input_color_image.get_system_timestamp().count();
 
                 std::ostringstream ss;
+
+                std::vector<int> compression_params;
+                compression_params.push_back(cv::IMWRITE_JPEG_QUALITY);
+                compression_params.push_back(95);
+
                 if (input_color_image.get_format() == K4A_IMAGE_FORMAT_COLOR_BGRA32) {
                     cv::Mat image_buffer = cv::Mat(cv::Size(w, h), CV_8UC4,
                                                    const_cast<void*>(static_cast<const void *>(input_color_image.get_buffer())),
                                                    static_cast<size_t>(input_color_image.get_stride_bytes()));
-                    timestamp = input_color_image.get_system_timestamp().count();
-
-                    std::vector<int> compression_params;
-                    compression_params.push_back(cv::IMWRITE_JPEG_QUALITY);
-                    compression_params.push_back(95);
+                    cv::remap(image_buffer, undistorted_image, m_rectify_maps.color_map_x,
+                              m_rectify_maps.color_map_y, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
 
                     ss << std::setw(10) << std::setfill('0') << frame_counter << "_color.jpg";
                     fs::path image_path = m_output_directory / ss.str();
-                    cv::imwrite(image_path, image_buffer, compression_params);
+                    cv::imwrite(image_path, undistorted_image, compression_params);
 
                 } else if (input_color_image.get_format() == K4A_IMAGE_FORMAT_COLOR_MJPG) {
                     // TODO: cast as ctype array and avoid corrade?
-                    auto rawData = Corrade::Containers::ArrayView<uint8_t>(const_cast<uint8_t *>(input_color_image.get_buffer()), input_color_image.get_size());
+                    int n_size = input_color_image.get_size();
+                    cv::Mat raw_data(1, n_size, CV_8UC1, (void*)(input_color_image.get_buffer()), input_color_image.get_size());
+                    image_buffer = cv::imdecode(raw_data, cv::IMREAD_COLOR);
+                    if ( image_buffer.data == NULL ) {
+                        // Error reading raw image data
+                        throw MissingDataException();
+                    }
+                    cv::remap(image_buffer, undistorted_image, m_rectify_maps.color_map_x,
+                              m_rectify_maps.color_map_y, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
                     ss << std::setw(10) << std::setfill('0') << frame_counter << "_color.jpg";
-                    std::string image_path = Corrade::Utility::Directory::join(m_output_directory, ss.str());
-                    Corrade::Utility::Directory::write(image_path, rawData);
+                    fs::path image_path = m_output_directory / ss.str();
+                    cv::imwrite(image_path, undistorted_image, compression_params);
+                    std::ostringstream s;
+                    s << std::setw(10) << std::setfill('0') << frame_counter << "distored_color.jpg";
+                    image_path = m_output_directory / s.str();
+                    cv::imwrite(image_path, image_buffer, compression_params);
                 } else {
                     spdlog::warn("Received color frame with unexpected format: {0}",
                                 input_color_image.get_format());
                     throw MissingDataException();
                 }
-                return input_color_image.get_device_timestamp().count();
+                return timestamp;
             } else {
                 return -1;
             }
@@ -390,18 +409,17 @@ namespace extract_mkv {
         k4a_transformation_destroy(transformation);
     }
 
-    void save_calibration(k4a_calibration_t calibration, fs::path output_directory) {
-        // from Kinect SDK ...
-
+    RectifyMaps process_calibration(k4a_calibration_t calibration, fs::path output_directory) {
         // converting the calibration data to OpenCV format
-        // extrinsic transformation from color to depth camera
+        // extrinsic transformation from depth to color camera
         cv::Mat se3 = cv::Mat(3, 3, CV_32FC1,
-                              calibration.extrinsics[K4A_CALIBRATION_TYPE_COLOR][K4A_CALIBRATION_TYPE_DEPTH].rotation);
+                              calibration.extrinsics[K4A_CALIBRATION_TYPE_DEPTH][K4A_CALIBRATION_TYPE_COLOR].rotation);
         cv::Mat t_vec = cv::Mat(3, 1, CV_32F,
-                                calibration.extrinsics[K4A_CALIBRATION_TYPE_COLOR][K4A_CALIBRATION_TYPE_DEPTH].translation);
+                                calibration.extrinsics[K4A_CALIBRATION_TYPE_DEPTH][K4A_CALIBRATION_TYPE_COLOR].translation);
 
         // intrinsic parameters of the depth camera
         k4a_calibration_intrinsic_parameters_t *intrinsics = &calibration.depth_camera_calibration.intrinsics.parameters;
+        // convert to opencv
         std::vector<float> _depth_camera_matrix = {
                 intrinsics->param.fx, 0.f, intrinsics->param.cx, 0.f, intrinsics->param.fy, intrinsics->param.cy, 0.f,
                 0.f, 1.f
@@ -411,6 +429,15 @@ namespace extract_mkv {
                                                  intrinsics->param.p2, intrinsics->param.k3, intrinsics->param.k4,
                                                  intrinsics->param.k5, intrinsics->param.k6};
         cv::Mat depth_dist_coeffs = cv::Mat(8, 1, CV_32F, &_depth_dist_coeffs[0]);
+
+        // apply undistortion of Brown-conrady model
+        int d_width = calibration.depth_camera_calibration.resolution_width;
+        int d_height =  calibration.depth_camera_calibration.resolution_height;
+        cv::Size depth_image_size = cv::Size(d_width, d_height);
+        cv::Mat new_depth_camera_matrix = cv::getOptimalNewCameraMatrix(depth_camera_matrix, depth_dist_coeffs, depth_image_size, 0);  
+        cv::Mat depth_map_x, depth_map_y;
+        cv::initUndistortRectifyMap(depth_camera_matrix, depth_dist_coeffs, cv::Mat(), new_depth_camera_matrix,
+                                    depth_image_size, CV_16SC2, depth_map_x, depth_map_y);
 
         // intrinsic parameters of the color camera
         intrinsics = &calibration.color_camera_calibration.intrinsics.parameters;
@@ -423,6 +450,14 @@ namespace extract_mkv {
                                                  intrinsics->param.p2, intrinsics->param.k3, intrinsics->param.k4,
                                                  intrinsics->param.k5, intrinsics->param.k6};
         cv::Mat color_dist_coeffs = cv::Mat(8, 1, CV_32F, &_color_dist_coeffs[0]);
+        int c_width = calibration.color_camera_calibration.resolution_width;
+        int c_height = calibration.color_camera_calibration.resolution_height;
+        cv::Size color_image_size = cv::Size(c_width, c_height);
+        cv::Mat new_color_camera_matrix = cv::getOptimalNewCameraMatrix(color_camera_matrix, color_dist_coeffs,
+                                                                        color_image_size, 0);  
+        cv::Mat color_map_x, color_map_y;
+        cv::initUndistortRectifyMap(color_camera_matrix, color_dist_coeffs, cv::Mat(), new_color_camera_matrix,
+                                    color_image_size, CV_32F, color_map_x, color_map_y);
 
         // store configuration in output directory
         fs::path config_fname = output_directory / "camera_calibration.yml";
@@ -430,18 +465,22 @@ namespace extract_mkv {
         cfg_fs << "depth_image_width" << calibration.depth_camera_calibration.resolution_width;
         cfg_fs << "depth_image_height" << calibration.depth_camera_calibration.resolution_height;
         cfg_fs << "depth_camera_matrix" << depth_camera_matrix;
+        cfg_fs << "undistored_depth_camera_matrix" << new_depth_camera_matrix;
         cfg_fs << "depth_distortion_coefficients" << depth_dist_coeffs;
 
         cfg_fs << "color_image_width" << calibration.color_camera_calibration.resolution_width;
         cfg_fs << "color_image_height" << calibration.color_camera_calibration.resolution_height;
         cfg_fs << "color_camera_matrix" << color_camera_matrix;
+        cfg_fs << "undistorted_color_camera_matrix" << new_color_camera_matrix;
         cfg_fs << "color_distortion_coefficients" << color_dist_coeffs;
 
         cfg_fs << "depth2color_translation" << t_vec;
         cfg_fs << "depth2color_rotation" << se3;
+        RectifyMaps maps{depth_map_x, depth_map_y, color_map_x, color_map_y};
+        return maps;
     }
 
-    void print_calibration(k4a_calibration_t& calibration)
+    void print_raw_calibration(k4a_calibration_t& calibration)
     {
         using namespace std;
 
