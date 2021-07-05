@@ -305,7 +305,15 @@ namespace extract_mkv {
         cv::Mat image_buffer = cv::Mat(cv::Size(color_image_width_pixels, color_image_height_pixels), CV_16UC1,
                                        const_cast<void *>(static_cast<const void *>(k4a_image_get_buffer(transformed_depth_image))),
                                        static_cast<size_t>(k4a_image_get_stride_bytes(transformed_depth_image)));
+        cv::Mat undistorted_image;
+        // undistort using color image rectify maps?
+        cv::remap(image_buffer, undistorted_image, m_rectify_maps.color_map_x,
+                  m_rectify_maps.color_map_y, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
 
+        cv::imwrite(image_path, undistorted_image);
+        std::ostringstream s;
+        s << std::setw(10) << std::setfill('0') << frame_counter << "_distorted_rgbd.tiff";
+        image_path = m_output_directory / s.str();
         cv::imwrite(image_path, image_buffer);
         k4a_image_release(transformed_depth_image);
         k4a_transformation_destroy(transformation);

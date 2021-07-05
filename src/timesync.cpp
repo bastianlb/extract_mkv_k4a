@@ -121,8 +121,7 @@ namespace extract_mkv {
 
               // TODO: only parallelize when rgbd is exported?
               for (auto feed : m_input_feeds) {
-                extract_frames(feed, frame_counter);
-                /*
+                
                 m_sem.wait();
                 std::scoped_lock worker_lock(m_lock);
                 m_worker_threads.push_back(std::thread([=, this]
@@ -135,7 +134,7 @@ namespace extract_mkv {
                     std::thread([=, this] (std::thread::id thread_id) {
                         this->remove_thread(thread_id);
                     }, std::this_thread::get_id()).detach();
-                }, feed, frame_counter));*/
+                }, feed, frame_counter));
               }
 
               ++frame_counter;
