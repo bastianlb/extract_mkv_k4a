@@ -6,9 +6,7 @@
 
 #include <spdlog/spdlog.h>
 #include <json/json.h>
-
-#include <Corrade/Utility/Directory.h>
-#include <Corrade/Containers/ArrayView.h>
+#include <json/writer.h>
 
 #include <opencv2/opencv.hpp>
 #include <opencv2/imgcodecs.hpp>
@@ -92,6 +90,12 @@ namespace extract_mkv {
             swap_y_z(3, 3) = 1;
             transform = swap_y_z * transform;
             m_extrinsics.matrix() = transform;
+            // write camera extrinsics
+            std::ofstream file_id;
+            fs::path filename = fs::path(output_directory) / "world2camera.json";
+            file_id.open(filename.c_str(), std::ios::out);
+            file_id << root << std::endl;
+            file_id.close();
         }
     }
 
@@ -208,7 +212,6 @@ namespace extract_mkv {
                     cv::imwrite(image_path, undistorted_image, compression_params);
 
                 } else if (input_color_image.get_format() == K4A_IMAGE_FORMAT_COLOR_MJPG) {
-                    // TODO: cast as ctype array and avoid corrade?
                     int n_size = input_color_image.get_size();
                     cv::Mat raw_data(1, n_size, CV_8UC1, (void*)(input_color_image.get_buffer()), input_color_image.get_size());
                     image_buffer = cv::imdecode(raw_data, cv::IMREAD_COLOR);
@@ -321,23 +324,20 @@ namespace extract_mkv {
 
     void K4AFrameExtractor::process_pointcloud(int frame_counter) {
 
-        spdlog::info("In process pointcloud");
+        spdlog::trace("In process pointcloud");
         const k4a::image input_depth_image = m_capture.get_depth_image();
         const k4a::image input_color_image = m_capture.get_color_image();
         int color_image_width_pixels = k4a_image_get_width_pixels(input_color_image.handle());
         int color_image_height_pixels = k4a_image_get_height_pixels(input_color_image.handle());
-        spdlog::info("aaa");
 
         k4a_transformation_t transformation = k4a_transformation_create(&m_calibration);
-        spdlog::info("bbb");
         // transform color image into depth camera geometry
         int depth_image_width_pixels = k4a_image_get_width_pixels(m_capture.get_depth_image().handle());
         int depth_image_height_pixels = k4a_image_get_height_pixels(m_capture.get_depth_image().handle());
-        spdlog::info("ccc");
         k4a_image_t transformed_color_image = NULL;
         k4a::image color_image;
         cv::Mat result;
-        spdlog::info("Done initializing pointcloud");
+        spdlog::trace("Done initializing pointcloud");
 
 
         if (input_color_image.get_format() == K4A_IMAGE_FORMAT_COLOR_BGRA32) {
@@ -408,7 +408,7 @@ namespace extract_mkv {
         }
 
         std::ostringstream ss;
-        ss << std::setw(4) << std::setfill('0') << frame_counter << "_" << m_name << "_pointcloud.ply";
+        ss << std::setw(4) << std::setfill('0') << frame_counter << "_pointcloud.ply";
         fs::path ply_path = m_output_directory / ss.str();
         tranformation_helpers_write_point_cloud(points, ply_path.c_str());
 

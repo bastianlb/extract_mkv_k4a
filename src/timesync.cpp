@@ -88,7 +88,6 @@ namespace extract_mkv {
             }
 
             if (m_export_config.export_pointcloud) {
-                spdlog::info("Extracting pointcloud");
                 feed->process_pointcloud(frame_counter);
             }
       } catch (const extract_mkv::MissingDataException& e) {

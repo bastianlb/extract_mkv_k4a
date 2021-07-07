@@ -9,7 +9,7 @@
 
 namespace extract_mkv {
 
-  const int MAX_PARALLEL_JOBS = 12;
+  const int MAX_PARALLEL_JOBS = 6;
 
   class Semaphore {
   public:
