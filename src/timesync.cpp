@@ -15,8 +15,10 @@
 using namespace extract_mkv;
 
 namespace extract_mkv {
-  Timesynchronizer::Timesynchronizer(size_t first_frame, size_t last_frame, ExportConfig export_config, bool timesync) :
-    m_export_config(export_config), m_first_frame(first_frame), m_last_frame(last_frame), m_use_timesync(timesync) {};
+  Timesynchronizer::Timesynchronizer(size_t first_frame, size_t last_frame,
+      size_t skip_frames, ExportConfig export_config, bool timesync) :
+    m_export_config(export_config), m_first_frame(first_frame), m_last_frame(last_frame), 
+    m_skip_frames(skip_frames), m_use_timesync(timesync) {};
 
   void Timesynchronizer::initialize_feeds(std::vector<fs::path> input_paths, fs::path output_directory) {
       std::for_each(std::execution::par, input_paths.begin(), input_paths.end(),
@@ -108,7 +110,7 @@ namespace extract_mkv {
               // feed forward happens in sync.. processing does not.
               feed_forward(frame_counter);
 
-              if (frame_counter < m_first_frame) {
+              if (frame_counter < m_first_frame || frame_counter % m_skip_frames != 0) {
                   frame_counter++;
                   continue;
               }

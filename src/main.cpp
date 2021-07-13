@@ -61,6 +61,7 @@ namespace Magnum {
 
         size_t m_first_frame{0};
         size_t m_last_frame{0};
+        size_t m_skip_frames{1};
 
         extract_mkv::ExportConfig m_export_config{};
         bool m_timesync{false};
@@ -106,6 +107,10 @@ namespace Magnum {
         }
         if (recording_config["last_frame"]) {
             m_last_frame = recording_config["last_frame"].as<int>();
+        }
+        if (recording_config["skip_frames"]) {
+            m_skip_frames = recording_config["skip_frames"].as<int>();
+            assert(m_skip_frames > 0);
         }
 
         if (!recording_config["output"].IsSequence()) {
@@ -168,7 +173,7 @@ namespace Magnum {
         Debug{} << "Core profile:" << GL::Context::current().isCoreProfile();
         Debug{} << "Context flags:" << GL::Context::current().flags();
 
-        extract_mkv::Timesynchronizer ts{m_first_frame, m_last_frame, m_export_config, m_timesync};
+        extract_mkv::Timesynchronizer ts{m_first_frame, m_last_frame, m_skip_frames, m_export_config, m_timesync};
         ts.initialize_feeds(m_input_feeds, m_output_directory);
         ts.run();
         spdlog::info("Done.");

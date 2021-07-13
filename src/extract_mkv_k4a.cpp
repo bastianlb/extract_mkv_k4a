@@ -48,7 +48,7 @@ namespace extract_mkv {
             }
             m_timestamp_file << m_tsss.str() << std::endl;
         }
-        if (m_export_config.align_clouds) {
+        if (m_export_config.export_pointcloud) {
             fs::path extrinsic_path = m_input_filename.parent_path() / "world2camera.json";
             std::ifstream ifs { extrinsic_path.c_str() };
             if (!ifs.is_open()) {
@@ -71,8 +71,11 @@ namespace extract_mkv {
                 throw MissingDataException();
             }
             spdlog::info("Loaded extrinsic calibration file for feed {0}", m_name);
-            Eigen::Quaternionf q{rot["w"].asFloat(), rot["x"].asFloat(), rot["y"].asFloat(), rot["z"].asFloat()};
-            Eigen::Vector3f t{trans["m00"].asFloat(), trans["m10"].asFloat(), trans["m20"].asFloat()};
+            Eigen::Quaternionf q{rot["w"].asFloat(), rot["x"].asFloat(),
+                                 rot["y"].asFloat(), rot["z"].asFloat()};
+            Eigen::Vector3f t{trans["m00"].asFloat(),
+                              trans["m10"].asFloat(),
+                              trans["m20"].asFloat()};
             Eigen::Matrix4f transform = Eigen::Matrix4f::Identity();
             transform.block<3, 3>(0, 0) = q.toRotationMatrix();
             transform.block<3, 1>(0, 3) = t;
@@ -81,15 +84,17 @@ namespace extract_mkv {
             Eigen::Matrix4f yz_transform = Eigen::Matrix4f::Identity();
             yz_transform(1,1) = -1.0;
             yz_transform(2,2) = -1.0;
-            transform = (yz_transform * transform * yz_transform);
+            transform = yz_transform * transform * yz_transform.transpose();
+
             // flip back to a convention where Z is up.
             Eigen::Matrix4f swap_y_z = Eigen::Matrix4f::Zero();
-            swap_y_z(0, 0) = 1;
-            swap_y_z(1, 2) = -1;
-            swap_y_z(2, 1) = -1;
+            auto m = Eigen::AngleAxisf(-0.5*M_PI, Eigen::Vector3f::UnitX());
+            swap_y_z.block<3, 3>(0, 0) = m.toRotationMatrix();
             swap_y_z(3, 3) = 1;
+
             transform = swap_y_z * transform;
             m_extrinsics.matrix() = transform;
+            std::cout << "Cam " << m_name << " extrinsics: " << m_extrinsics.matrix() << std::endl;
             // write camera extrinsics
             std::ofstream file_id;
             fs::path filename = fs::path(output_directory) / "world2camera.json";
@@ -210,6 +215,16 @@ namespace extract_mkv {
                     ss << std::setw(10) << std::setfill('0') << frame_counter << "_color.jpg";
                     fs::path image_path = m_output_directory / ss.str();
                     cv::imwrite(image_path, undistorted_image, compression_params);
+                    std::ostringstream s;
+                    s << std::setw(10) << std::setfill('0') << frame_counter << "_distorted_color.jpg";
+                    image_path = m_output_directory / s.str();
+                    cv::imwrite(image_path, image_buffer, compression_params);
+                    cv::Mat diff;
+                    std::ostringstream sss;
+                    cv::absdiff(image_buffer, undistorted_image, diff);
+                    sss << std::setw(10) << std::setfill('0') << frame_counter << "_diff_color.jpg";
+                    image_path = m_output_directory / sss.str();
+                    cv::imwrite(image_path, diff, compression_params);
 
                 } else if (input_color_image.get_format() == K4A_IMAGE_FORMAT_COLOR_MJPG) {
                     int n_size = input_color_image.get_size();
@@ -225,7 +240,7 @@ namespace extract_mkv {
                     fs::path image_path = m_output_directory / ss.str();
                     cv::imwrite(image_path, undistorted_image, compression_params);
                     std::ostringstream s;
-                    s << std::setw(10) << std::setfill('0') << frame_counter << "distored_color.jpg";
+                    s << std::setw(10) << std::setfill('0') << frame_counter << "_distored_color.jpg";
                     image_path = m_output_directory / s.str();
                     cv::imwrite(image_path, image_buffer, compression_params);
                 } else {
