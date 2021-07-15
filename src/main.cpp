@@ -65,6 +65,7 @@ namespace Magnum {
 
         extract_mkv::ExportConfig m_export_config{};
         bool m_timesync{false};
+        bool m_enable_seek{false};
 
         fs::path m_input_directory;
         fs::path m_output_directory;
@@ -84,6 +85,8 @@ namespace Magnum {
             spdlog::set_level(spdlog::level::debug);
         else if (loglevel == "warn")
             spdlog::set_level(spdlog::level::warn);
+        else if (loglevel == "trace")
+            spdlog::set_level(spdlog::level::trace);
         spdlog::set_pattern("[%H:%M:%S] %^[%l]%$ %l [thread %t] %v");
         std::vector<spdlog::sink_ptr> sinks;
         sinks.push_back(std::make_shared<spdlog::sinks::stdout_color_sink_st>());
@@ -164,7 +167,8 @@ namespace Magnum {
           m_input_feeds.push_back(input_feed);
         }
 
-        YAML::Node m_timesync = config["timesync"];
+        m_timesync = config["timesync"].as<bool>();
+        m_enable_seek = config["seek"].as<bool>();
 
         spdlog::info("Successfully parsed configuration.");
     }
@@ -173,7 +177,9 @@ namespace Magnum {
         Debug{} << "Core profile:" << GL::Context::current().isCoreProfile();
         Debug{} << "Context flags:" << GL::Context::current().flags();
 
-        extract_mkv::Timesynchronizer ts{m_first_frame, m_last_frame, m_skip_frames, m_export_config, m_timesync};
+        extract_mkv::Timesynchronizer ts{m_first_frame, m_last_frame,
+                                         m_skip_frames, m_export_config, 
+                                         m_timesync, m_enable_seek};
         ts.initialize_feeds(m_input_feeds, m_output_directory);
         ts.run();
         spdlog::info("Done.");

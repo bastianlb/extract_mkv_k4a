@@ -16,9 +16,11 @@ using namespace extract_mkv;
 
 namespace extract_mkv {
   Timesynchronizer::Timesynchronizer(size_t first_frame, size_t last_frame,
-      size_t skip_frames, ExportConfig export_config, bool timesync) :
+      size_t skip_frames, ExportConfig export_config, bool timesync, bool enable_seek) :
     m_export_config(export_config), m_first_frame(first_frame), m_last_frame(last_frame), 
-    m_skip_frames(skip_frames), m_use_timesync(timesync) {};
+    m_skip_frames(skip_frames), m_use_timesync(timesync), m_enable_seek(enable_seek) {
+      spdlog::info("Initialized Timesynchronizer. timesync: {0}", timesync);
+    };
 
   void Timesynchronizer::initialize_feeds(std::vector<fs::path> input_paths, fs::path output_directory) {
       std::for_each(std::execution::par, input_paths.begin(), input_paths.end(),
@@ -55,6 +57,7 @@ namespace extract_mkv {
               [] (auto lhs, auto rhs) {
               return lhs->m_last_depth_ts < rhs->m_last_depth_ts;
         });
+        spdlog::trace("Syncing feeds");
         for (auto feed : m_input_feeds) {
           // TODO: sync both color and depth? or just color
           if ((first_feed->m_last_depth_ts - feed->m_last_depth_ts) > m_sync_window ||
@@ -70,41 +73,21 @@ namespace extract_mkv {
       }
   };
 
-  void Timesynchronizer::extract_frames(std::shared_ptr<K4AFrameExtractor> feed, int frame_counter) {
-      try {
-            spdlog::info("Processing {0} : {1}", feed->m_name, frame_counter);
-            if (m_export_config.export_depth) {
-                feed->process_depth(frame_counter);
-            }
-
-            if (m_export_config.export_color) {
-                feed->process_color(frame_counter);
-            }
-
-            if (m_export_config.export_infrared) {
-                feed->process_ir(frame_counter);
-            }
-
-            if (m_export_config.export_rgbd) {
-                feed->process_rgbd(frame_counter);
-            }
-
-            if (m_export_config.export_pointcloud) {
-                feed->process_pointcloud(frame_counter);
-            }
-      } catch (const extract_mkv::MissingDataException& e) {
-          spdlog::error("Error during playback: {0}", e.what());
-      }
-  }
-
   void Timesynchronizer::run() {
 
       // now export frames
       int frame_counter{0};
       int wait_count{0};
       std::thread t;
+      // DOES NOT WORK FOR SOME RECORDINGS!
+      if (m_enable_seek && m_first_frame > 0) {
+        for (auto feed : m_input_feeds) {
+          feed->seek(m_first_frame);
+        }
+        frame_counter = m_first_frame;
+      }
 
-      while (true) {
+      while (!m_last_frame || frame_counter <= m_last_frame) {
           try {
 
               // feed forward happens in sync.. processing does not.
@@ -112,23 +95,17 @@ namespace extract_mkv {
 
               if (frame_counter < m_first_frame || frame_counter % m_skip_frames != 0) {
                   frame_counter++;
+                  spdlog::trace("Skipping frame: {0}", frame_counter);
                   continue;
-              }
-
-              if (m_last_frame > 0 && frame_counter > m_last_frame) {
-                  break;
               }
               spdlog::debug("Extract Frame: {0}", frame_counter);
 
-              // TODO: only parallelize when rgbd is exported?
               for (auto feed : m_input_feeds) {
-                
                 m_sem.wait();
-                std::scoped_lock worker_lock(m_lock);
                 m_worker_threads.push_back(std::thread([=, this]
                   (std::shared_ptr<K4AFrameExtractor> feed, const int frame_counter) {
                     spdlog::debug("Initializing worker thread for {0} - {1}", feed->m_name, frame_counter); 
-                    this->extract_frames(feed, frame_counter);
+                    feed->extract_frames(frame_counter);
                     m_sem.notify();
                     // TODO: this is ugly way to clean up threads, maybe we want to
                     // use an async monitor based approach.. and check if they are done.
@@ -142,8 +119,8 @@ namespace extract_mkv {
 
           } catch (k4a::error &e) {
               if (std::string(e.what()) == "Failed to get next capture!") {
-                  spdlog::debug("Playback Stopped.");
-                  break;
+                  spdlog::error("{0}, continuing..", e.what());
+                  continue;
               } else {
                   spdlog::error("Error during playback {0}.", e.what());
                   exit(1);
@@ -154,7 +131,7 @@ namespace extract_mkv {
 
   void Timesynchronizer::remove_thread(std::thread::id id) {
       spdlog::debug("Clean up thread"); 
-      std::lock_guard<std::mutex> lock(m_lock);
+      std::scoped_lock<std::mutex> lock(m_lock);
       auto iter = std::find_if(m_worker_threads.begin(), m_worker_threads.end(),
           [=](std::thread &t) { return (t.get_id() == id); });
       if (iter != m_worker_threads.end())

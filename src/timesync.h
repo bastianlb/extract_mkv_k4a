@@ -9,7 +9,7 @@
 
 namespace extract_mkv {
 
-  const int MAX_PARALLEL_JOBS = 6;
+  const int MAX_PARALLEL_JOBS = 12;
 
   class Semaphore {
   public:
@@ -40,10 +40,9 @@ namespace extract_mkv {
   };
 
   class Timesynchronizer { 
-public: explicit Timesynchronizer(size_t, size_t, size_t, ExportConfig, bool);
+public: explicit Timesynchronizer(size_t, size_t, size_t, ExportConfig, bool, bool);
       void initialize_feeds(std::vector<fs::path>, fs::path);
       void feed_forward(int);
-      void extract_frames(std::shared_ptr<K4AFrameExtractor>, int);
       void run();
       void remove_thread(std::thread::id);
 
@@ -56,6 +55,7 @@ public: explicit Timesynchronizer(size_t, size_t, size_t, ExportConfig, bool);
       float m_sync_window;
 
       bool m_use_timesync;
+      bool m_enable_seek;
       ExportConfig m_export_config;
 
       std::mutex m_lock;

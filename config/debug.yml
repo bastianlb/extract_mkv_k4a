@@ -1,7 +1,7 @@
 record:
-  first_frame: 100
-  last_frame: 200
-  skip_frames: 15
+  first_frame: 1500
+  last_frame: 3000
+  skip_frames: 5
   input_dir: "/storage/holistic_or"
   feeds:
     - "cn01/capture_cn01_take2.mkv"
@@ -13,9 +13,10 @@ record:
   output:
     - timestamp
       # - depth
-    - color
+      # - color
       # - rgbd
-      # - pointcloud
-      # - align_clouds 
+    - pointcloud
+    - align_clouds 
   output_dir: "../test_system"
 timesync: true
+seek: false

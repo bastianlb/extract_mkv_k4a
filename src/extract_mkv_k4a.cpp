@@ -27,12 +27,14 @@ namespace extract_mkv {
 
         m_dev_config = m_dev.get_record_configuration();
         m_calibration = m_dev.get_calibration();
+        k4a_record_configuration_t record_config = m_dev.get_record_configuration();
+        m_timestamp_offset = record_config.start_timestamp_offset_usec;
 
         // store calibration
         print_raw_calibration(m_calibration);
         m_rectify_maps = process_calibration(m_calibration, m_output_directory);
 
-        if (export_config.export_pointcloud){
+        if (export_config.export_pointcloud) {
             spdlog::debug("Set color conversion to BGRA32 for pointcloud export");
             m_dev.set_color_conversion(K4A_IMAGE_FORMAT_COLOR_BGRA32);
         }
@@ -108,34 +110,97 @@ namespace extract_mkv {
         m_dev.close();
     }
 
+    void K4AFrameExtractor::seek(int frame) {
+        std::chrono::duration<int> fps(get_fps());
+        auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(frame * fps);
+        if (timestamp.count() < m_dev.get_recording_length().count()) {
+            spdlog::debug("Feed {0} seeking to timestamp: {1}ms", m_name, timestamp.count());
+            // first get one capture..
+            m_dev.get_next_capture(&m_capture);
+            m_dev.seek_timestamp(timestamp, K4A_PLAYBACK_SEEK_DEVICE_TIME);
+        } else {
+            spdlog::error("Feed {0} unable to seek to timestamp: {1}ms", m_name, timestamp.count());
+        }
+    }
+
     void K4AFrameExtractor::next_capture(int frame_counter) {
         m_tsss.str("");
         m_tsss.clear();
+        std::scoped_lock lock(m_worker_lock);
         m_dev.get_next_capture(&m_capture);
         const k4a::image depth_image = m_capture.get_depth_image();
-        if (depth_image)
-            m_last_depth_ts = depth_image.get_device_timestamp().count();
-        else
-            m_last_depth_ts = -10e6;
         const k4a::image color_image = m_capture.get_depth_image();
-        if (color_image)
-            m_last_color_ts = color_image.get_device_timestamp().count();
+        if (!depth_image.is_valid() && !color_image.is_valid()) {
+            spdlog::error("Failed to acquire images for cam {0} frame {1}", m_name, frame_counter);
+        }
+        if (depth_image.is_valid())
+            m_last_depth_ts = depth_image.get_device_timestamp().count() + m_timestamp_offset;
         else
-            m_last_color_ts = -10e6;
+            m_last_depth_ts = 0;
+        if (color_image.is_valid())
+            m_last_color_ts = color_image.get_device_timestamp().count() + m_timestamp_offset;
+        else
+            m_last_color_ts = 0;
         if (m_export_config.export_timestamp) {
+            int color_system_ts;
+            int depth_system_ts;
             m_tsss << std::to_string(frame_counter) << ",";
-            int depth_system_ts = depth_image.get_system_timestamp().count();
+            if (depth_image.is_valid())
+                 depth_system_ts = depth_image.get_system_timestamp().count();
+            else
+                depth_system_ts = 0;
+            if (color_image.is_valid())
+                color_system_ts = color_image.get_system_timestamp().count();
+            else
+                color_system_ts = 0;
             m_tsss << m_last_depth_ts << "," << depth_system_ts << ",";
-            int color_system_ts = depth_image.get_system_timestamp().count();
             m_tsss << m_last_color_ts << "," << color_system_ts << ",";
             // don't include IR timestamp export by default
             if (m_export_config.export_infrared) {
                 const k4a::image ir_image = m_capture.get_ir_image();
-                int ir_device_ts = ir_image.get_device_timestamp().count();
-                int ir_system_ts = ir_image.get_system_timestamp().count();
-                m_tsss << ir_device_ts << "," << ir_system_ts << ",";
+                if (ir_image.is_valid()) {
+                    int ir_device_ts = ir_image.get_device_timestamp().count();
+                    int ir_system_ts = ir_image.get_system_timestamp().count();
+                    m_tsss << ir_device_ts << "," << ir_system_ts << ",";
+                }
             }
             m_timestamp_file << m_tsss.str() << std::endl;
+        }
+    }
+
+    void K4AFrameExtractor::extract_frames(int frame_counter) {
+        try {
+            m_worker_lock.lock();
+            const k4a::image input_depth_image = m_capture.get_depth_image();
+            const k4a::image input_color_image = m_capture.get_color_image();
+            const k4a::image input_ir_image = m_capture.get_ir_image();
+            m_worker_lock.unlock();
+            spdlog::info("Processing {0} : {1}", m_name, frame_counter);
+            if (m_export_config.export_depth && input_depth_image.is_valid()) {
+                process_depth(input_depth_image, frame_counter);
+            }
+
+            if (m_export_config.export_color && input_color_image.is_valid()) {
+                process_color(input_color_image, frame_counter);
+            }
+
+            if (m_export_config.export_infrared && input_ir_image.is_valid()) {
+                process_ir(input_ir_image, frame_counter);
+            }
+
+            if (m_export_config.export_rgbd && input_depth_image.is_valid() && input_color_image.is_valid()) {
+                process_rgbd(input_color_image, input_depth_image, frame_counter);
+            }
+
+            if (m_export_config.export_pointcloud && input_depth_image.is_valid() && input_color_image.is_valid()) {
+                process_pointcloud(input_color_image, input_depth_image, frame_counter);
+            }
+        } catch (const extract_mkv::MissingDataException& e) {
+          spdlog::error("Error during playback: {0}", e.what());
+          m_worker_lock.unlock();
+        } catch(const std::exception& e) {
+          spdlog::error("Error during playback: {0}", e.what());
+          m_worker_lock.unlock();
         }
     }
 
@@ -155,10 +220,9 @@ namespace extract_mkv {
         }
     }
 
-    int K4AFrameExtractor::process_depth(int frame_counter) {
-        const k4a::image input_depth_image = m_capture.get_depth_image();
+    int K4AFrameExtractor::process_depth(k4a::image input_depth_image, int frame_counter) {
         uint timestamp = input_depth_image.get_system_timestamp().count();
-        if (input_depth_image) {
+        if (input_depth_image.is_valid()) {
             int w = input_depth_image.get_width_pixels();
             int h = input_depth_image.get_height_pixels();
 
@@ -187,10 +251,9 @@ namespace extract_mkv {
         }
     }
 
-    int K4AFrameExtractor::process_color(int frame_counter) {
-        const k4a::image input_color_image = m_capture.get_color_image();
+    int K4AFrameExtractor::process_color(k4a::image input_color_image, int frame_counter) {
         {
-            if (input_color_image) {
+            if (input_color_image.is_valid()) {
                 cv::Mat undistorted_image;
 
                 int w = input_color_image.get_width_pixels();
@@ -218,13 +281,13 @@ namespace extract_mkv {
                     std::ostringstream s;
                     s << std::setw(10) << std::setfill('0') << frame_counter << "_distorted_color.jpg";
                     image_path = m_output_directory / s.str();
-                    cv::imwrite(image_path, image_buffer, compression_params);
+                    // cv::imwrite(image_path, image_buffer, compression_params);
                     cv::Mat diff;
                     std::ostringstream sss;
                     cv::absdiff(image_buffer, undistorted_image, diff);
                     sss << std::setw(10) << std::setfill('0') << frame_counter << "_diff_color.jpg";
                     image_path = m_output_directory / sss.str();
-                    cv::imwrite(image_path, diff, compression_params);
+                    // cv::imwrite(image_path, diff, compression_params);
 
                 } else if (input_color_image.get_format() == K4A_IMAGE_FORMAT_COLOR_MJPG) {
                     int n_size = input_color_image.get_size();
@@ -242,7 +305,7 @@ namespace extract_mkv {
                     std::ostringstream s;
                     s << std::setw(10) << std::setfill('0') << frame_counter << "_distored_color.jpg";
                     image_path = m_output_directory / s.str();
-                    cv::imwrite(image_path, image_buffer, compression_params);
+                    // cv::imwrite(image_path, image_buffer, compression_params);
                 } else {
                     spdlog::warn("Received color frame with unexpected format: {0}",
                                 input_color_image.get_format());
@@ -255,10 +318,9 @@ namespace extract_mkv {
         }
     }
 
-    int K4AFrameExtractor::process_ir(int frame_counter) {
-        const k4a::image input_ir_image = m_capture.get_ir_image();
+    int K4AFrameExtractor::process_ir(k4a::image input_ir_image, int frame_counter) {
         {
-            if (input_ir_image) {
+            if (input_ir_image.is_valid()) {
 
                 int w = input_ir_image.get_width_pixels();
                 int h = input_ir_image.get_height_pixels();
@@ -286,15 +348,14 @@ namespace extract_mkv {
         }
     }
 
-    void K4AFrameExtractor::process_rgbd(int frame_counter) {
-
-        const k4a::image input_depth_image = m_capture.get_depth_image();
-        const k4a::image input_color_image = m_capture.get_color_image();
+    void K4AFrameExtractor::process_rgbd(k4a::image input_color_image,
+                                         k4a::image input_depth_image,
+                                         int frame_counter) {
 
         int color_image_width_pixels = k4a_image_get_width_pixels(input_color_image.handle());
         int color_image_height_pixels = k4a_image_get_height_pixels(input_color_image.handle());
 
-        if (!(input_color_image && input_depth_image)) {
+        if (!(input_color_image.is_valid() && input_depth_image.is_valid())) {
             spdlog::warn("Export RGBD requires depth and color image.");
             throw MissingDataException();
         }
@@ -306,6 +367,7 @@ namespace extract_mkv {
                                                      &transformed_depth_image))
         {
             spdlog::error("Failed to create transformed color image");
+            k4a_image_release(transformed_depth_image);
             throw MissingDataException();
         }
 
@@ -315,6 +377,8 @@ namespace extract_mkv {
                                                                transformed_depth_image))
         {
             spdlog::error("Failed to compute transformed depth image");
+            k4a_image_release(transformed_depth_image);
+            k4a_transformation_destroy(transformation);
             throw MissingDataException();
         }
         std::ostringstream ss;
@@ -337,18 +401,17 @@ namespace extract_mkv {
         k4a_transformation_destroy(transformation);
     }
 
-    void K4AFrameExtractor::process_pointcloud(int frame_counter) {
+    void K4AFrameExtractor::process_pointcloud(k4a::image input_color_image,
+                                               k4a::image input_depth_image,
+                                               int frame_counter) {
 
         spdlog::trace("In process pointcloud");
-        const k4a::image input_depth_image = m_capture.get_depth_image();
-        const k4a::image input_color_image = m_capture.get_color_image();
-        int color_image_width_pixels = k4a_image_get_width_pixels(input_color_image.handle());
-        int color_image_height_pixels = k4a_image_get_height_pixels(input_color_image.handle());
+        int color_image_width_pixels = input_color_image.get_width_pixels();
+        int color_image_height_pixels = input_color_image.get_height_pixels();
 
-        k4a_transformation_t transformation = k4a_transformation_create(&m_calibration);
         // transform color image into depth camera geometry
-        int depth_image_width_pixels = k4a_image_get_width_pixels(m_capture.get_depth_image().handle());
-        int depth_image_height_pixels = k4a_image_get_height_pixels(m_capture.get_depth_image().handle());
+        int depth_image_width_pixels = input_depth_image.get_width_pixels();
+        int depth_image_height_pixels = input_depth_image.get_height_pixels();
         k4a_image_t transformed_color_image = NULL;
         k4a::image color_image;
         cv::Mat result;
@@ -356,12 +419,12 @@ namespace extract_mkv {
 
 
         if (input_color_image.get_format() == K4A_IMAGE_FORMAT_COLOR_BGRA32) {
-            color_image = m_capture.get_color_image();
+            color_image = input_color_image;
 
         } else if (input_color_image.get_format() == K4A_IMAGE_FORMAT_COLOR_MJPG) {
 
-            cv::Mat rawData(1, m_capture.get_color_image().get_size(), CV_8SC1,
-                            const_cast<void *>(static_cast<const void *>(m_capture.get_color_image().get_buffer())));
+            cv::Mat rawData(1, input_color_image.get_size(), CV_8SC1,
+                            const_cast<void *>(static_cast<const void *>(input_color_image.get_buffer())));
             cv::Mat image_buffer = cv::imdecode(rawData, -cv::IMREAD_COLOR);
 
             cv::cvtColor(image_buffer, result, cv::COLOR_BGR2BGRA);
@@ -373,7 +436,7 @@ namespace extract_mkv {
 
         } else {
             spdlog::warn("Received color frame with unexpected format: {0}",
-                        m_capture.get_color_image().get_format());
+                         input_color_image.get_format());
             throw MissingDataException();
         }
 
@@ -384,6 +447,7 @@ namespace extract_mkv {
                                                      &transformed_color_image))
         {
             spdlog::error("Failed to create transformed color image");
+            k4a_image_release(transformed_color_image);
             throw MissingDataException();
         }
 
@@ -395,22 +459,31 @@ namespace extract_mkv {
                                                      &point_cloud_image))
         {
             spdlog::error("Failed to create point cloud image");
+            k4a_image_release(transformed_color_image);
+            k4a_image_release(point_cloud_image);
             throw MissingDataException();
         }
 
+        k4a_transformation_t transformation = k4a_transformation_create(&m_calibration);
         if (K4A_RESULT_SUCCEEDED !=
-                k4a_transformation_color_image_to_depth_camera(transformation, m_capture.get_depth_image().handle(), color_image.handle(), transformed_color_image))
+                k4a_transformation_color_image_to_depth_camera(transformation, input_depth_image.handle(), color_image.handle(), transformed_color_image))
         {
             spdlog::error("Failed to compute transformed color image");
+            k4a_image_release(transformed_color_image);
+            k4a_image_release(point_cloud_image);
+            k4a_transformation_destroy(transformation);
             throw MissingDataException();
         }
 
         if (K4A_RESULT_SUCCEEDED != k4a_transformation_depth_image_to_point_cloud(transformation,
-                                                                                  m_capture.get_depth_image().handle(),
+                                                                                  input_depth_image.handle(),
                                                                                   K4A_CALIBRATION_TYPE_DEPTH,
                                                                                   point_cloud_image))
         {
             spdlog::error("Failed to compute point cloud");
+            k4a_image_release(transformed_color_image);
+            k4a_image_release(point_cloud_image);
+            k4a_transformation_destroy(transformation);
             throw MissingDataException();
         }
 
