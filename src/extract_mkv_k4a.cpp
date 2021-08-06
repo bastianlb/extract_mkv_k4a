@@ -28,7 +28,7 @@ namespace extract_mkv {
         m_dev_config = m_dev.get_record_configuration();
         m_calibration = m_dev.get_calibration();
         k4a_record_configuration_t record_config = m_dev.get_record_configuration();
-        m_timestamp_offset = record_config.start_timestamp_offset_usec;
+        m_timestamp_offset = std::chrono::microseconds(record_config.start_timestamp_offset_usec);
 
         // store calibration
         print_raw_calibration(m_calibration);
@@ -111,7 +111,7 @@ namespace extract_mkv {
     }
 
     void K4AFrameExtractor::seek(int frame) {
-        std::chrono::duration<int> fps(get_fps());
+        std::chrono::duration fps = std::chrono::seconds(get_fps());
         auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(frame * fps);
         if (timestamp.count() < m_dev.get_recording_length().count()) {
             spdlog::debug("Feed {0} seeking to timestamp: {1}ms", m_name, timestamp.count());
@@ -123,24 +123,22 @@ namespace extract_mkv {
         }
     }
 
-    void K4AFrameExtractor::next_capture(int frame_counter) {
-        m_tsss.str("");
-        m_tsss.clear();
+    void K4AFrameExtractor::next_capture() {
         std::scoped_lock lock(m_worker_lock);
         m_dev.get_next_capture(&m_capture);
         const k4a::image depth_image = m_capture.get_depth_image();
-        const k4a::image color_image = m_capture.get_depth_image();
+        if (depth_image.is_valid())
+            m_last_depth_ts = depth_image.get_device_timestamp() + m_timestamp_offset;
+        else
+            m_last_depth_ts = std::chrono::microseconds(0);
+    }
+
+    void K4AFrameExtractor::record_timestamps(k4a::image depth_image, k4a::image color_image, int frame_counter) {
+        m_tsss.str("");
+        m_tsss.clear();
         if (!depth_image.is_valid() && !color_image.is_valid()) {
             spdlog::error("Failed to acquire images for cam {0} frame {1}", m_name, frame_counter);
         }
-        if (depth_image.is_valid())
-            m_last_depth_ts = depth_image.get_device_timestamp().count() + m_timestamp_offset;
-        else
-            m_last_depth_ts = 0;
-        if (color_image.is_valid())
-            m_last_color_ts = color_image.get_device_timestamp().count() + m_timestamp_offset;
-        else
-            m_last_color_ts = 0;
         if (m_export_config.export_timestamp) {
             int color_system_ts;
             int depth_system_ts;
@@ -153,8 +151,8 @@ namespace extract_mkv {
                 color_system_ts = color_image.get_system_timestamp().count();
             else
                 color_system_ts = 0;
-            m_tsss << m_last_depth_ts << "," << depth_system_ts << ",";
-            m_tsss << m_last_color_ts << "," << color_system_ts << ",";
+            m_tsss << m_last_depth_ts.count() << "," << depth_system_ts << ",";
+            m_tsss << m_last_color_ts.count() << "," << color_system_ts << ",";
             // don't include IR timestamp export by default
             if (m_export_config.export_infrared) {
                 const k4a::image ir_image = m_capture.get_ir_image();
@@ -166,6 +164,7 @@ namespace extract_mkv {
             }
             m_timestamp_file << m_tsss.str() << std::endl;
         }
+
     }
 
     void K4AFrameExtractor::extract_frames(int frame_counter) {
@@ -176,6 +175,7 @@ namespace extract_mkv {
             const k4a::image input_ir_image = m_capture.get_ir_image();
             m_worker_lock.unlock();
             spdlog::info("Processing {0} : {1}", m_name, frame_counter);
+            record_timestamps(input_color_image, input_depth_image, frame_counter);
             if (m_export_config.export_depth && input_depth_image.is_valid()) {
                 process_depth(input_depth_image, frame_counter);
             }
@@ -238,9 +238,9 @@ namespace extract_mkv {
                 std::string image_path = m_output_directory / ss.str();
                 cv::imwrite(image_path, undistorted_image);
                 std::ostringstream s;
-                s << std::setw(10) << std::setfill('0') << frame_counter << "_undistorted_depth.tiff";
+                s << std::setw(10) << std::setfill('0') << frame_counter << "_distorted_depth.tiff";
                 image_path = m_output_directory / s.str();
-                cv::imwrite(image_path, image_buffer);
+                //cv::imwrite(image_path, image_buffer);
             } else {
                 spdlog::warn("Received depth frame with unexpected format: {0}", input_depth_image.get_format());
                 throw MissingDataException();
@@ -488,6 +488,7 @@ namespace extract_mkv {
         }
 
         // TODO: use PCL? remove null points?
+        spdlog::trace("Exporting pointcloud.");
         std::vector<color_point_t> points = image_to_pointcloud(point_cloud_image, transformed_color_image);
         if (m_export_config.align_clouds) {
             for (auto &point : points) {

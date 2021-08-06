@@ -49,7 +49,7 @@ namespace extract_mkv {
             K4AFrameExtractor(std::string, std::string, std::string, ExportConfig);
             ~K4AFrameExtractor();
 
-            void next_capture(int);
+            void next_capture();
             uint8_t get_fps();
 
             int process_depth(k4a::image, int);
@@ -58,12 +58,13 @@ namespace extract_mkv {
             void process_rgbd(k4a::image, k4a::image, int);
             void process_pointcloud(k4a::image, k4a::image, int);
             void compute_undistortion_intrinsics();
+            void record_timestamps(k4a::image, k4a::image, int);
             void extract_frames(int);
             void seek(int);
 
             std::string m_name;
-            uint64_t m_last_color_ts;
-            uint64_t m_last_depth_ts;
+            std::chrono::microseconds m_last_color_ts;
+            std::chrono::microseconds m_last_depth_ts;
             std::mutex m_worker_lock;
             Eigen::Affine3f m_extrinsics = Eigen::Affine3f::Identity();
 
@@ -79,6 +80,6 @@ namespace extract_mkv {
             std::ofstream m_timestamp_file;
             ExportConfig m_export_config;
             RectifyMaps m_rectify_maps;
-            uint32_t m_timestamp_offset;
+            std::chrono::microseconds m_timestamp_offset;
     };
 }

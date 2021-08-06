@@ -52,7 +52,8 @@ public: explicit Timesynchronizer(size_t, size_t, size_t, ExportConfig, bool, bo
       const size_t m_first_frame{0};
       const size_t m_last_frame{0};
       const size_t m_skip_frames{1};
-      float m_sync_window;
+      // kinect devices work in microseconds
+      std::chrono::microseconds m_sync_window{0};
 
       bool m_use_timesync;
       bool m_enable_seek;

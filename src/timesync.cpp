@@ -38,12 +38,14 @@ namespace extract_mkv {
           spdlog::error("Not all fps of recordings are equal!");
           throw 1;
       }
-      m_sync_window =  (1 / static_cast<float>(base_fps)) * std::pow(10, 9);
+      // sync_window in microseconds
+      float fps = 0.8 * (1 / static_cast<float>(base_fps)) * pow(10, 6);
+      m_sync_window = std::chrono::microseconds(static_cast<uint64_t>(fps));
   };
 
   void Timesynchronizer::feed_forward(int frame_counter) {
       for (auto feed : m_input_feeds) {
-          feed->next_capture(frame_counter);
+          feed->next_capture();
       }
       if (!m_use_timesync) {
         return;
@@ -59,13 +61,13 @@ namespace extract_mkv {
         });
         spdlog::trace("Syncing feeds");
         for (auto feed : m_input_feeds) {
-          // TODO: sync both color and depth? or just color
-          if ((first_feed->m_last_depth_ts - feed->m_last_depth_ts) > m_sync_window ||
-               (first_feed->m_last_color_ts - feed->m_last_color_ts) > m_sync_window) {
+          auto diff = first_feed->m_last_depth_ts - feed->m_last_depth_ts;
+          spdlog::trace("Feed {0} syncing diff: {1} - syncwindow: {2}", feed->m_name, diff.count(), m_sync_window.count());
+          if (diff > m_sync_window) {
             spdlog::warn("Frame: {0} - Feed {1} out of sync at {2}. Feed {3} is ahead at {4}, fast forward..",
-                frame_counter, feed->m_name, feed->m_last_depth_ts, first_feed->m_name, first_feed->m_last_depth_ts);
+                frame_counter, feed->m_name, feed->m_last_depth_ts.count(), first_feed->m_name, first_feed->m_last_depth_ts.count());
             break_cond = false;
-            feed->next_capture(frame_counter);
+            feed->next_capture();
           }
         }
         if (break_cond)
@@ -100,6 +102,11 @@ namespace extract_mkv {
               }
               spdlog::debug("Extract Frame: {0}", frame_counter);
 
+              /*
+              for (auto feed : m_input_feeds) {
+                feed->extract_frames(frame_counter);
+              }
+              */
               for (auto feed : m_input_feeds) {
                 m_sem.wait();
                 m_worker_threads.push_back(std::thread([=, this]
