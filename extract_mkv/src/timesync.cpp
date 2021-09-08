@@ -9,14 +9,14 @@
 #include <unistd.h>
 #endif
 
-#include <timesync.h>
-#include <extract_mkv_k4a.h>
+#include "../include/timesync.h"
+#include "../include/extract_mkv_k4a.h"
 
 using namespace extract_mkv;
 
 namespace extract_mkv {
-  Timesynchronizer::Timesynchronizer(size_t first_frame, size_t last_frame,
-      size_t skip_frames, ExportConfig export_config, bool timesync, bool enable_seek) :
+  Timesynchronizer::Timesynchronizer(const size_t first_frame, const size_t last_frame,
+      const size_t skip_frames, ExportConfig export_config, const bool timesync, const bool enable_seek) :
     m_export_config(export_config), m_first_frame(first_frame), m_last_frame(last_frame), 
     m_skip_frames(skip_frames), m_use_timesync(timesync), m_enable_seek(enable_seek) {
       spdlog::info("Initialized Timesynchronizer. timesync: {0}", timesync);
@@ -75,8 +75,36 @@ namespace extract_mkv {
       }
   };
 
+  void Timesynchronizer::monitor() {
+    while (m_is_running) {
+      spdlog::debug("Cleaning up threads.."); 
+      std::unique_lock<std::mutex> lock1(m_thread_free_lock);
+      m_wait_cv.wait(lock1);
+
+      std::scoped_lock<std::mutex> lock2(m_lock);
+      auto iter = m_finished_threads.begin();
+      while (iter != m_finished_threads.end()) {
+
+        auto id = *iter;
+
+        auto found = std::find_if(m_worker_threads.begin(), m_worker_threads.end(),
+            [=](std::thread &t) { return (t.get_id() == id); });
+        if (found != m_worker_threads.end())
+        {
+            found->join();
+            m_worker_threads.erase(found);
+        }
+        iter = m_finished_threads.erase(iter);
+      }
+    }
+  }
+
   void Timesynchronizer::run() {
 
+      m_is_running = true;
+      m_monitor_thread = std::thread([=] () {
+        monitor();
+      });
       // now export frames
       int frame_counter{0};
       int wait_count{0};
@@ -109,16 +137,15 @@ namespace extract_mkv {
               */
               for (auto feed : m_input_feeds) {
                 m_sem.wait();
+                std::scoped_lock<std::mutex> lock1(m_lock);
                 m_worker_threads.push_back(std::thread([=, this]
                   (std::shared_ptr<K4AFrameExtractor> feed, const int frame_counter) {
                     spdlog::debug("Initializing worker thread for {0} - {1}", feed->m_name, frame_counter); 
                     feed->extract_frames(frame_counter);
+                    std::scoped_lock<std::mutex> lock2(m_thread_free_lock);
+                    m_finished_threads.push_back(std::this_thread::get_id());
                     m_sem.notify();
-                    // TODO: this is ugly way to clean up threads, maybe we want to
-                    // use an async monitor based approach.. and check if they are done.
-                    std::thread([=, this] (std::thread::id thread_id) {
-                        this->remove_thread(thread_id);
-                    }, std::this_thread::get_id()).detach();
+                    m_wait_cv.notify_one();
                 }, feed, frame_counter));
               }
 
@@ -134,17 +161,21 @@ namespace extract_mkv {
               }
           }
       }
-  }
+      m_is_running = false;
+      m_wait_cv.notify_all();
+      spdlog::trace("Waiting for monitor...");
+      m_monitor_thread.join();
+      spdlog::trace("Monitor done...");
+      // wait for worker threads to complete
 
-  void Timesynchronizer::remove_thread(std::thread::id id) {
-      spdlog::debug("Clean up thread"); 
       std::scoped_lock<std::mutex> lock(m_lock);
-      auto iter = std::find_if(m_worker_threads.begin(), m_worker_threads.end(),
-          [=](std::thread &t) { return (t.get_id() == id); });
-      if (iter != m_worker_threads.end())
-      {
-          iter->join();
-          m_worker_threads.erase(iter);
+      for (auto &thread : m_worker_threads) {
+        if (thread.joinable()) {
+          auto id = std::hash<std::thread::id>{}(thread.get_id());
+          spdlog::trace("Waiting for thread.. {0}", id);
+          thread.join();
+          spdlog::trace("Thread Done.. {0}", id);
+        }
       }
   }
 }

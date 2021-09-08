@@ -1,0 +1,20 @@
+record:
+  first_frame: 1
+  last_frame: 5
+    # skip_frames: 1
+  input_dir: "/storage/calib_4k/"
+  feeds:
+    - "cn01/capture-000000.mkv"
+    - "cn02/capture-000000.mkv"
+    - "cn03/capture-000000.mkv"
+    - "cn04/capture-000000.mkv"
+  output:
+    # - timestamp
+    # - depth
+    - color
+      # - rgbd
+      #- pointcloud
+      # - align_clouds 
+  output_dir: "/storage/atlas_calibrations/"
+timesync: true
+seek: false

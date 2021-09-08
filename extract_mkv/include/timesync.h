@@ -4,7 +4,7 @@
 #include <mutex>
 #include <condition_variable>
 
-#include <extract_mkv_k4a.h>
+#include "../include/extract_mkv_k4a.h"
 
 
 namespace extract_mkv {
@@ -40,11 +40,12 @@ namespace extract_mkv {
   };
 
   class Timesynchronizer { 
-public: explicit Timesynchronizer(size_t, size_t, size_t, ExportConfig, bool, bool);
+    public: explicit Timesynchronizer(const size_t, const size_t, 
+            const size_t, ExportConfig, const bool, const bool);
       void initialize_feeds(std::vector<fs::path>, fs::path);
       void feed_forward(int);
       void run();
-      void remove_thread(std::thread::id);
+      void monitor();
 
     protected:
       std::vector<std::shared_ptr<K4AFrameExtractor>> m_input_feeds;
@@ -59,9 +60,15 @@ public: explicit Timesynchronizer(size_t, size_t, size_t, ExportConfig, bool, bo
       bool m_enable_seek;
       ExportConfig m_export_config;
 
-      std::mutex m_lock;
       Semaphore m_sem{MAX_PARALLEL_JOBS};
+      std::mutex m_lock;
+      std::mutex m_thread_free_lock;
+      std::condition_variable m_wait_cv;
       std::vector<std::thread> m_worker_threads;
+      std::vector<std::thread::id> m_finished_threads;
+
+      std::thread m_monitor_thread;
+      bool m_is_running{false};
   };
 
 }

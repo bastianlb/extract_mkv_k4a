@@ -17,6 +17,10 @@ class ExportMKVConan(ConanFile):
     settings = "os", "compiler", "build_type", "arch"
     generators = "cmake", "virtualrunenv"
 
+    options = {
+        "with_python": [True, False],
+    }
+
     requires = (
         "opencv/4.5.0@camposs/stable",
         "eigen/[3.3.9]@camposs/stable",
@@ -27,11 +31,12 @@ class ExportMKVConan(ConanFile):
         "spdlog/1.8.2",
         "yaml-cpp/0.6.3",
         "tbb/2020.3",
-        "jsoncpp/1.9.4"
+        "jsoncpp/1.9.4",
          )
 
     default_options = {
         "opencv:shared": True,
+        "with_python": True,
         "magnum:with_anyimageimporter": True,
         "magnum:with_tgaimporter": True,
         "magnum:with_anysceneimporter": True,
@@ -49,6 +54,11 @@ class ExportMKVConan(ConanFile):
 
     # all sources are deployed with the package
     exports_sources = "cmake/*", "include/*", "src/*", "CMakeLists.txt"
+
+    def requirements(self):
+        if self.options.with_python:
+                self.requires("python_dev_config/[>=1.0]@camposs/stable")
+                self.requires("pybind11/2.7.1@camposs/stable")
 
     def configure(self):
 
@@ -71,6 +81,12 @@ class ExportMKVConan(ConanFile):
         self.copy(src="lib", pattern="*.so*", dst="./lib") # Copies all so files from packages lib folder to my "lib" folder
         self.copy(src="lib", pattern="*.a", dst="./lib") # Copies all static libraries from packages lib folder to my "lib" folder
         self.copy(src="bin", pattern="*", dst="./bin") # Copies all applications
+        if self.options.with_python:
+            with tools.run_environment(self):
+                python_version = os.environ.get("PYTHON_VERSION", None) or "3.8"
+                self.output.write("Collecting python modules in ./lib/python%s" % python_version)
+                self.copy(src="lib/python%s" % python_version, pattern="*", dst="./lib/python%s" % python_version, keep_path=True) # Copies all python modules
+                self.copy(src="lib/python", pattern="*", dst="./lib/python", keep_path=True) # Copies all python modules
 
     def _cmake_configure(self):
         cmake = CMake(self)

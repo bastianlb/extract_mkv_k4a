@@ -11,7 +11,7 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/imgcodecs.hpp>
 
-#include "extract_mkv_k4a.h"
+#include "../include/extract_mkv_k4a.h"
 
 namespace fs = std::filesystem;
 
@@ -50,7 +50,7 @@ namespace extract_mkv {
             }
             m_timestamp_file << m_tsss.str() << std::endl;
         }
-        if (m_export_config.export_pointcloud) {
+        if (m_export_config.export_pointcloud || m_export_config.export_extrinsics) {
             fs::path extrinsic_path = m_input_filename.parent_path() / "world2camera.json";
             std::ifstream ifs { extrinsic_path.c_str() };
             if (!ifs.is_open()) {

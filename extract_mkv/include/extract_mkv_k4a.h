@@ -10,7 +10,7 @@
 #include <k4a/k4a.hpp>
 #include <k4arecord/playback.hpp>
 
-#include "transformation_helpers.h"
+#include "../include/transformation_helpers.h"
 
 namespace fs = std::filesystem;
 
@@ -32,6 +32,7 @@ namespace extract_mkv {
       bool export_rgbd{false};
       bool export_pointcloud{false};
       bool align_clouds{false};
+      bool export_extrinsics{false};
     };
 
     struct RectifyMaps {
