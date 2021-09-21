@@ -22,6 +22,7 @@ SET(MAIN_LIBS
     CONAN_PKG::magnum
     CONAN_PKG::corrade
     CONAN_PKG::kinect-azure-sensor-sdk
+    CONAN_PKG::kinect-azure-bodytracking-sdk
     CONAN_PKG::bzip2
     CONAN_PKG::spdlog
     CONAN_PKG::yaml-cpp
