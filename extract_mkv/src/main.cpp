@@ -7,10 +7,6 @@
 
 #include <Corrade/configure.h>
 #include <Corrade/Utility/Arguments.h>
-#include <Corrade/Utility/Debug.h>
-#include <Corrade/Utility/DebugStl.h>
-#include <Corrade/Utility/Directory.h>
-#include <Corrade/Containers/ArrayView.h>
 
 #ifdef CORRADE_TARGET_UNIX
 #ifdef CORRADE_TARGET_APPLE
@@ -25,13 +21,6 @@
 #include <Magnum/Platform/WindowlessWglApplication.h>
 #endif
 #endif
-
-#include <Corrade/Containers/Array.h>
-#include <Corrade/Containers/ArrayView.h>
-
-#include "Magnum/Math/Matrix3.h"
-#include "Magnum/Math/Matrix4.h"
-#include "Magnum/Math/Range.h"
 
 #include "Magnum/GL/Context.h"
 
@@ -174,8 +163,8 @@ namespace Magnum {
     }
 
     int ExtractFramesMKV::exec() {
-        Debug{} << "Core profile:" << GL::Context::current().isCoreProfile();
-        Debug{} << "Context flags:" << GL::Context::current().flags();
+        //Debug{} << "Core profile:" << GL::Context::current().isCoreProfile();
+        //Debug{} << "Context flags:" << GL::Context::current().flags();
 
         extract_mkv::Timesynchronizer ts{m_first_frame, m_last_frame,
                                          m_skip_frames, m_export_config, 
