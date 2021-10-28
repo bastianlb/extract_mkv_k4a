@@ -33,6 +33,7 @@ namespace extract_mkv {
       bool export_pointcloud{false};
       bool align_clouds{false};
       bool export_extrinsics{false};
+      bool export_bodypose{false};
     };
 
     struct RectifyMaps {
@@ -58,6 +59,7 @@ namespace extract_mkv {
             int process_ir(k4a::image, int);
             void process_rgbd(k4a::image, k4a::image, int);
             void process_pointcloud(k4a::image, k4a::image, int);
+            void process_pose(k4a::image, k4a::image, int);
             void compute_undistortion_intrinsics();
             void record_timestamps(k4a::image, k4a::image, int);
             void extract_frames(int);

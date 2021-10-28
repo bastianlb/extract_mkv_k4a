@@ -1,0 +1,23 @@
+record:
+  first_frame: 1000
+  last_frame: 3000
+  skip_frames: 5
+  input_dir: "/storage/holistic_or/"
+  feeds:
+    - "cn01/capture_cn01_take2.mkv"
+    - "cn02/capture_cn02_take2.mkv"
+    - "cn03/capture_cn03_take2.mkv"
+    - "cn04/capture_cn04_take2.mkv"
+    - "cn05/capture_cn05_take2.mkv"
+    - "cn06/capture_cn06_take2.mkv"
+  output:
+    # - timestamp
+    - depth
+    - color
+      # - rgbd
+      # - pointcloud
+      # - align_clouds
+    - bodypose
+  output_dir: "../../bodytracking"
+timesync: true
+seek: false

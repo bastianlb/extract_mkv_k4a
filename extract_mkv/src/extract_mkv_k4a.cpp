@@ -2,6 +2,7 @@
 #include <filesystem>
 
 #include <k4a/k4a.hpp>
+#include <k4abt.hpp>
 #include <k4arecord/playback.hpp>
 
 #include <spdlog/spdlog.h>
@@ -195,6 +196,10 @@ namespace extract_mkv {
             if (m_export_config.export_pointcloud && input_depth_image.is_valid() && input_color_image.is_valid()) {
                 process_pointcloud(input_color_image, input_depth_image, frame_counter);
             }
+
+            if (m_export_config.export_bodypose && input_depth_image.is_valid() && input_ir_image.is_valid()) {
+                process_pose(input_ir_image, input_depth_image, frame_counter);
+            }
         } catch (const extract_mkv::MissingDataException& e) {
           spdlog::error("Error during playback: {0}", e.what());
           m_worker_lock.unlock();
@@ -345,6 +350,72 @@ namespace extract_mkv {
             } else {
                 return -1;
             }
+        }
+    }
+
+    void K4AFrameExtractor::process_pose(k4a::image input_ir_image,
+                                         k4a::image input_depth_image,
+                                         int frame_counter) {
+        k4abt_tracker_configuration_t tracker_config = K4ABT_TRACKER_CONFIG_DEFAULT;
+        // tracker_config.sensor_orientation = K4ABT_SENSOR_ORIENTATION_FLIP180;
+        auto tracker = k4abt::tracker::create(m_calibration, tracker_config);
+
+            if (tracker.enqueue_capture(m_capture)) {
+                k4abt::frame bodyFrame = tracker.pop_result();
+                Json::Value bodies(Json::arrayValue);
+                if (bodyFrame != nullptr && bodyFrame.get_num_bodies() > 0) {
+                  for (size_t i = 0, idx = 0; i < bodyFrame.get_num_bodies(); ++i) {
+                    k4abt_body_t k4abt_body = bodyFrame.get_body(i);
+                    Json::Value joints(Json::arrayValue);
+                    for (unsigned int j = 0; j < K4ABT_JOINT_COUNT; ++j, ++idx) {
+                        auto joint = k4abt_body.skeleton.joints[j];
+                        k4a_float3_t position = joint.position; // xyz
+                        k4a_quaternion_t orientation = joint.orientation; // wxyz
+                        k4abt_joint_confidence_level_t confidenceLevel = joint.confidence_level;
+
+                        Json::Value bj;
+
+                        bj["bodyId"] = static_cast<uint16_t>(k4abt_body.id);
+                        bj["jointType"] = j;
+                        bj["confidenceLevel"] = static_cast<uint8_t>(confidenceLevel);
+
+                        // @todo: Unify K4A 2 PCPD Coordinate Transforms in k4a_utils !!
+
+                        auto translation = Eigen::Vector3f(
+                            position.v[0] / 1000.f,
+                            position.v[1] / 1000.f,
+                            position.v[2] / 1000.f
+                        );
+
+                        auto rotation = Eigen::Quaternion<float>(
+                            orientation.v[0],
+                            orientation.v[1],
+                            orientation.v[2],
+                            orientation.v[3]
+                        );
+
+                        Json::Value trans(Json::arrayValue);
+                        trans.append(translation.x());
+                        trans.append(translation.y());
+                        trans.append(translation.z());
+                        bj["translation"] = trans;
+
+                        Json::Value rot(Json::arrayValue);
+                        trans.append(rotation.w());
+                        trans.append(rotation.x());
+                        trans.append(rotation.y());
+                        trans.append(rotation.z());
+                        bj["rotation"] = rot;
+                        joints.append(bj);
+                    }
+                  bodies.append(joints);
+                }
+            }
+            std::ostringstream s;
+            s << std::setw(10) << std::setfill('0') << frame_counter << "_bodyjoints.json";
+            fs::path joint_path = m_output_directory / s.str();
+            std::ofstream fout(joint_path);
+            fout << bodies;
         }
     }
 

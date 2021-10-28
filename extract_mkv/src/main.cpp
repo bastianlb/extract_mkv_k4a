@@ -125,12 +125,13 @@ namespace Magnum {
             m_export_config.export_rgbd = true;
           else if (it->as<std::string>() == "pointcloud")
             m_export_config.export_pointcloud = true;
+          else if (it->as<std::string>() == "bodypose")
+            m_export_config.export_bodypose = true;
           else if (it->as<std::string>() == "align_clouds")
             m_export_config.align_clouds= true;
           else
             spdlog::error("Invalid export type: [{0}].", it->as<std::string>());
         }
-
 
         m_input_directory = fs::path(recording_config["input_dir"].as<std::string>());
         m_output_directory = fs::path(recording_config["output_dir"].as<std::string>());
