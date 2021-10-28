@@ -33,6 +33,7 @@ class ExportMKVConan(ConanFile):
         "yaml-cpp/0.6.3",
         "tbb/2020.3",
         "jsoncpp/1.9.4",
+        "happly/cci.20200822",
          )
 
     default_options = {

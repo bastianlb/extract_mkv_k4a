@@ -1,20 +1,21 @@
 record:
-  first_frame: 1000
-  last_frame: 4000
-  skip_frames: 10
-  input_dir: "//artekmed/recordings/03_animal_trials/210914_animal_trial_03/recordings/recordings_1409_recording_05/"
+  first_frame: 0
+  last_frame: 20
+  skip_frames: 1
+  input_dir: "/storage/holistic_or/"
   feeds:
-    # - "cn01/capture-000000.mkv"
-    - "cn02/capture-000031.mkv"
-      # - "cn03/capture-000000.mkv"
-      # - "cn04/capture-000000.mkv"
+    - "cn01/capture.mkv"
+    - "cn02/capture.mkv"
+    - "cn03/capture.mkv"
+    - "cn04/capture.mkv"
   output:
     # - timestamp
     # - depth
-    - color
-      # - rgbd
-      # - pointcloud
-      # - align_clouds
-  output_dir: "~/ownCloud/atlas/scene_export_2109/suture/"
+    # - color
+    # - infrared
+    # - rgbd
+    - pointcloud
+    # - align_clouds
+  output_dir: "../output"
 timesync: true
 seek: false

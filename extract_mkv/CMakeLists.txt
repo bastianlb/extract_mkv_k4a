@@ -28,6 +28,7 @@ SET(MAIN_LIBS
     CONAN_PKG::yaml-cpp
     CONAN_PKG::tbb
     CONAN_PKG::jsoncpp
+    CONAN_PKG::happly
 )
 
 target_link_libraries(${TARGET_NAME} PRIVATE ${MAIN_LIBS})
