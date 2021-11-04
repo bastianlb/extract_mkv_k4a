@@ -3,7 +3,6 @@
 #include <sstream>              // Stringstreams
 #include <exception>
 #include <algorithm>
-#include <filesystem>
 
 #include <Corrade/configure.h>
 #include <Corrade/Utility/Arguments.h>
@@ -33,9 +32,17 @@
 #include <k4a/k4a.hpp>
 #include <k4arecord/playback.hpp>
 
-#include "../include/timesync.h"
+#include "extract_mkv/timesync.h"
+#include "extract_mkv/filesystem.h"
 
-namespace fs = std::filesystem;
+#ifdef WITH_PCPD
+#include "extract_mkv/pcpd_file_exporter.h"
+#endif
+
+enum FILE_MODE {
+    PCPD,
+    K4A,
+};
 
 namespace Magnum {
 
@@ -48,9 +55,10 @@ namespace Magnum {
     private:
         Corrade::Utility::Arguments args;
 
-        size_t m_first_frame{0};
-        size_t m_last_frame{0};
-        size_t m_skip_frames{1};
+        FILE_MODE m_file_mode {K4A};
+        size_t m_first_frame {0};
+        size_t m_last_frame {0};
+        size_t m_skip_frames {1};
 
         extract_mkv::ExportConfig m_export_config{};
         bool m_timesync{false};
@@ -92,7 +100,30 @@ namespace Magnum {
             spdlog::error("Incorrectly formatted config, exiting."); 
             exit(1);
         }
+
+        if (config["mode"]) {
+            auto mode = config["mode"].as<std::string>();
+            std::transform(mode.begin(), mode.end(), mode.begin(), ::tolower);
+            if (mode == std::string("pcpd")) {
+                m_file_mode = FILE_MODE::PCPD;
+            } else if (mode == std::string("k4a")) {
+                m_file_mode = FILE_MODE::K4A;
+            } else {
+                spdlog::error("Bad file mode.. defaulting to K4A");
+            }
+        }
+
         YAML::Node recording_config = config["record"];
+        // TODO: currently pcpd works only with start/end TS
+        // k4a only with frame based..
+        // move all params to ExportConfig!
+
+        if (recording_config["start_ts"]) {
+            m_export_config.start_ts = recording_config["start_ts"].as<int64_t>();
+        }
+        if (recording_config["end_ts"]) {
+            m_export_config.end_ts = recording_config["end_ts"].as<int64_t>();
+        }
 
         if (recording_config["first_frame"]) {
             m_first_frame = recording_config["first_frame"].as<int>();
@@ -102,6 +133,7 @@ namespace Magnum {
         }
         if (recording_config["skip_frames"]) {
             m_skip_frames = recording_config["skip_frames"].as<int>();
+            m_export_config.skip_frames = m_skip_frames;
             assert(m_skip_frames > 0);
         }
 
@@ -150,9 +182,16 @@ namespace Magnum {
 
         for (YAML::const_iterator it=feeds.begin(); it!=feeds.end(); ++it) {
           fs::path input_feed = m_input_directory / it->as<std::string>();
-          if (!fs::is_regular_file(input_feed)) {
-            spdlog::error("Invalid filepath {0}", input_feed.string());
-            exit(1);
+          if (m_file_mode == K4A) {
+              if (!fs::is_regular_file(input_feed)) {
+                spdlog::error("Invalid filepath {0}, should be a k4a mkv.", input_feed.string());
+                exit(1);
+              }
+          } else if (m_file_mode == PCPD) {
+              if (!fs::is_directory(input_feed)) {
+                spdlog::error("Invalid filepath {0}, should be a directory.", input_feed.string());
+                exit(1);
+              }
           }
           m_input_feeds.push_back(input_feed);
         }
@@ -167,11 +206,23 @@ namespace Magnum {
         //Debug{} << "Core profile:" << GL::Context::current().isCoreProfile();
         //Debug{} << "Context flags:" << GL::Context::current().flags();
 
-        extract_mkv::Timesynchronizer ts{m_first_frame, m_last_frame,
-                                         m_skip_frames, m_export_config, 
-                                         m_timesync, m_enable_seek};
-        ts.initialize_feeds(m_input_feeds, m_output_directory);
-        ts.run();
+        if (m_file_mode == PCPD) {
+#ifdef WITH_PCPD
+            extract_mkv::PCPDFileExporter ts{m_export_config};
+            ts.initialize_feeds(m_input_feeds, m_output_directory);
+            ts.run();
+#else
+            spdlog::error("Pcpd exporter not defined. Compile with WITH_PCPD=ON");
+#endif
+        } else if (m_file_mode == K4A) {
+            extract_mkv::Timesynchronizer ts{m_first_frame, m_last_frame,
+                                             m_skip_frames, m_export_config, 
+                                             m_timesync, m_enable_seek};
+            ts.initialize_feeds(m_input_feeds, m_output_directory);
+            ts.run();
+        } else {
+            spdlog::error("Invalid file mode");
+        }
         spdlog::info("Done.");
         exit(0);
         return 0;

@@ -1,5 +1,9 @@
+#ifdef __GNUC__
+#if __GNUC__ >= 9
 #include <execution>
 #include <tbb/tbb.h>
+#endif
+#endif
 #include <spdlog/spdlog.h>
 #include <future>
 
@@ -9,8 +13,8 @@
 #include <unistd.h>
 #endif
 
-#include "../include/timesync.h"
-#include "../include/extract_mkv_k4a.h"
+#include "extract_mkv/timesync.h"
+#include "extract_mkv/extract_mkv_k4a.h"
 
 using namespace extract_mkv;
 
@@ -23,6 +27,7 @@ namespace extract_mkv {
     };
 
   void Timesynchronizer::initialize_feeds(std::vector<fs::path> input_paths, fs::path output_directory) {
+#if __GNUC__ >= 9
       std::for_each(std::execution::par, input_paths.begin(), input_paths.end(),
           [=, this](auto&& input_dir) {
           std::string feed_name = input_dir.parent_path().filename().string();
@@ -32,6 +37,16 @@ namespace extract_mkv {
           std::scoped_lock<std::mutex> guard(m_lock);
           m_input_feeds.push_back(frame_extractor);
       });
+#else
+      // TODO: could do easy parallel join threads for gcc 7
+      for(auto input_dir : input_paths) {
+          std::string feed_name = input_dir.parent_path().filename().string();
+          spdlog::info("Initializing {0}", feed_name);
+          // append the appropriate directory onto the output path, i.e. cn01 cn02 cn03..
+          auto frame_extractor = std::make_shared<K4AFrameExtractor>(input_dir, output_directory / feed_name, feed_name, m_export_config);
+          m_input_feeds.push_back(frame_extractor);
+      }
+#endif
       auto base_fps = m_input_feeds[0]->get_fps();
       if (!std::all_of(m_input_feeds.begin() + 1, m_input_feeds.end(), 
             [&] (auto feed) {return feed->get_fps() == base_fps;}) ) {
@@ -138,7 +153,7 @@ namespace extract_mkv {
               for (auto feed : m_input_feeds) {
                 m_sem.wait();
                 std::scoped_lock<std::mutex> lock1(m_lock);
-                m_worker_threads.push_back(std::thread([=, this]
+                m_worker_threads.push_back(std::thread([=]
                   (std::shared_ptr<K4AFrameExtractor> feed, const int frame_counter) {
                     spdlog::debug("Initializing worker thread for {0} - {1}", feed->m_name, frame_counter); 
                     feed->extract_frames(frame_counter);

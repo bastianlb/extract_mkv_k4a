@@ -7,7 +7,7 @@
 #include <vector>
 #include "happly.h"
 
-#include "../include/transformation_helpers.h"
+#include "extract_mkv/transformation_helpers.h"
 
 std::vector<color_point_t> image_to_pointcloud(const k4a_image_t point_cloud_image,
                                              const k4a_image_t color_image) {

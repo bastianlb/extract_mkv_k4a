@@ -19,6 +19,7 @@ class ExportMKVConan(ConanFile):
 
     options = {
         "with_python": [True, False],
+        "with_pcpd": [True, False],
     }
 
     requires = (
@@ -39,6 +40,7 @@ class ExportMKVConan(ConanFile):
     default_options = {
         "opencv:shared": True,
         "with_python": True,
+        "with_pcpd": False,
         "magnum:with_anyimageimporter": True,
         "magnum:with_tgaimporter": True,
         "magnum:with_anysceneimporter": True,
@@ -61,6 +63,30 @@ class ExportMKVConan(ConanFile):
         if self.options.with_python:
                 self.requires("python_dev_config/[>=1.0]@camposs/stable")
                 self.requires("pybind11/2.7.1@camposs/stable")
+        if self.options.with_pcpd:
+            self.requires("Boost/1.75.0@camposs/stable")
+            self.requires("pcl/1.11.1-r1@camposs/stable")
+            self.requires("rapidjson/1.1.0")
+            self.requires("cuda_dev_config/[1.1]@camposs/stable")
+            self.requires("ringbuffer/0.2.4@artekmed/stable")
+            self.requires("rtsplib/0.1.4@artekmed/stable")
+            self.requires("enet/1.3.17@camposs/stable")
+            self.requires("draco/1.4.1@camposs/stable")
+            self.requires("cppfs/1.3.0@camposs/stable")
+            self.requires("cereal/1.3.0")
+            self.requires("capnproto/0.8.0@camposs/stable")
+            self.requires("matroska/1.6.2@camposs/stable")
+            self.requires("libjpeg-turbo/2.0.5")
+            self.requires("yuv/1749@camposs/stable")
+            self.requires("zdepth/0.1@camposs/stable")
+            self.requires("optick/1.3.1.0@camposs/stable")
+            self.requires("msgpack/3.2.0@camposs/stable")
+            self.requires("zmq/4.3.2@camposs/stable")
+            self.requires("azmq/1.0.3@camposs/stable")
+            self.requires("zstd/1.4.3")
+            self.requires("eventbus/3.0.0-r2@camposs/stable")
+            self.requires("rttr/0.9.7-dev@camposs/stable")
+            self.requires("nvidia-video-codec-sdk/11.0.10@vendor/stable")
 
     def configure(self):
 

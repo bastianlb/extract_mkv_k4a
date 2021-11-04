@@ -4,7 +4,8 @@
 #include <mutex>
 #include <condition_variable>
 
-#include "../include/extract_mkv_k4a.h"
+#include "extract_mkv/utils.h"
+#include "extract_mkv/extract_mkv_k4a.h"
 
 
 namespace extract_mkv {

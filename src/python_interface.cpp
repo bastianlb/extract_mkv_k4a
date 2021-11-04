@@ -1,11 +1,10 @@
-#pragma once
-
 #include <spdlog/spdlog.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-#include <timesync.h>
-#include <extract_mkv_k4a.h>
+#include <extract_mkv/timesync.h>
+#include <extract_mkv/extract_mkv_k4a.h>
+#include "extract_mkv/filesystem.h"
 
 namespace py = pybind11;
 
@@ -43,8 +42,8 @@ namespace extract_mkv {
              const bool>())
         .def("initialize_feeds", &Timesynchronizer::initialize_feeds)
         .def("run", &Timesynchronizer::run);
-    py::class_<std::filesystem::path>(m, "Path")
+    py::class_<fs::path>(m, "Path")
         .def(py::init<std::string>());
-    py::implicitly_convertible<std::string, std::filesystem::path>();
+    py::implicitly_convertible<std::string, fs::path>();
   }
 }

@@ -1,15 +1,14 @@
+mode: PCPD
 record:
-  first_frame: 1000
-  last_frame: 5000
+  start_ts: 1000
+  end_ts: 5000
   skip_frames: 1
-  input_dir: "/storage/holistic_or"
+  input_dir: "/storage/atlas_recordings/210810_animal_trial_01/recordings/recordings_1108_recording_5/"
   feeds:
-    - "cn01/capture_cn01_take2.mkv"
-    - "cn02/capture_cn02_take2.mkv"
-    - "cn03/capture_cn03_take2.mkv"
-    - "cn04/capture_cn04_take2.mkv"
-    - "cn05/capture_cn05_take2.mkv"
-    - "cn06/capture_cn06_take2.mkv"
+    - "cn01/"
+    - "cn02/"
+    - "cn03/"
+    - "cn04/"
   output:
     # - timestamp
     # - color
