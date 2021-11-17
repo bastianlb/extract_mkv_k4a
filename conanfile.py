@@ -23,13 +23,14 @@ class ExportMKVConan(ConanFile):
     }
 
     requires = (
-        "opencv/4.5.0@camposs/stable",
+        "opencv/4.5.1@camposs/stable",
         "eigen/[3.3.9]@camposs/stable",
         "magnum/2020.06@camposs/stable",
         "corrade/2020.06@camposs/stable",
         "kinect-azure-sensor-sdk/1.4.1@camposs/stable",
         "kinect-azure-bodytracking-sdk/1.1.0@vendor/stable",
         "bzip2/1.0.8@conan/stable",
+        "zlib/1.2.11@camposs/stable", # ffmpeg version needs to be overriden
         "spdlog/1.8.2",
         "yaml-cpp/0.6.3",
         "tbb/2020.3",
@@ -39,6 +40,7 @@ class ExportMKVConan(ConanFile):
 
     default_options = {
         "opencv:shared": True,
+        "opencv:with_ffmpeg": True,
         "with_python": True,
         "with_pcpd": False,
         "magnum:with_anyimageimporter": True,

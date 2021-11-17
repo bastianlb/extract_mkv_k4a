@@ -13,20 +13,43 @@
 #include <unistd.h>
 #endif
 
+#include <chrono>
 #include "extract_mkv/timesync.h"
 #include "extract_mkv/extract_mkv_k4a.h"
 
 using namespace extract_mkv;
 
+static std::chrono::steady_clock::time_point exiting_timestamp;
+std::atomic_bool stop_flag = false;
+
+void sig_handler( int s) {
+    (void)s; // Unused
+    if (!stop_flag)
+    {
+      spdlog::warn("Recieved Ctrl+C");
+        exiting_timestamp = std::chrono::steady_clock::now();
+        stop_flag= true;
+    }
+    // If Ctrl-C is received again after 1 second, force-stop the application since it's not responding.
+    else if (std::chrono::steady_clock::now() - exiting_timestamp > std::chrono::seconds(1))
+    {
+        spdlog::warn("Forcing stop.");
+        exit(1);
+    }
+}
+
 namespace extract_mkv {
-  Timesynchronizer::Timesynchronizer(const size_t first_frame, const size_t last_frame,
-      const size_t skip_frames, ExportConfig export_config, const bool timesync, const bool enable_seek) :
-    m_export_config(export_config), m_first_frame(first_frame), m_last_frame(last_frame), 
+  TimesynchronizerBase::TimesynchronizerBase(ExportConfig& export_config) : m_export_config(export_config) {
+     signal( SIGINT, &sig_handler);
+  };
+  TimesynchronizerK4A::TimesynchronizerK4A(const size_t first_frame, const size_t last_frame,
+      const size_t skip_frames, ExportConfig& export_config, const bool timesync, const bool enable_seek) :
+    TimesynchronizerBase(export_config), m_first_frame(first_frame), m_last_frame(last_frame),
     m_skip_frames(skip_frames), m_use_timesync(timesync), m_enable_seek(enable_seek) {
       spdlog::info("Initialized Timesynchronizer. timesync: {0}", timesync);
     };
 
-  void Timesynchronizer::initialize_feeds(std::vector<fs::path> input_paths, fs::path output_directory) {
+  void TimesynchronizerK4A::initialize_feeds(std::vector<fs::path> input_paths, fs::path output_directory) {
 #if __GNUC__ >= 9
       std::for_each(std::execution::par, input_paths.begin(), input_paths.end(),
           [=, this](auto&& input_dir) {
@@ -58,7 +81,7 @@ namespace extract_mkv {
       m_sync_window = std::chrono::microseconds(static_cast<uint64_t>(fps));
   };
 
-  void Timesynchronizer::feed_forward(int frame_counter) {
+  void TimesynchronizerK4A::feed_forward(int frame_counter) {
       for (auto feed : m_input_feeds) {
           feed->next_capture();
       }
@@ -90,11 +113,11 @@ namespace extract_mkv {
       }
   };
 
-  void Timesynchronizer::monitor() {
+  void TimesynchronizerBase::monitor() {
     while (m_is_running) {
-      spdlog::debug("Cleaning up threads.."); 
+      spdlog::trace("Cleaning up threads.."); 
       std::unique_lock<std::mutex> lock1(m_thread_free_lock);
-      m_wait_cv.wait(lock1);
+      m_wait_cv.wait(lock1);https://zoom.us/j/8185306906?pwd=YXgwd1JKMjFTd0xRRXNPc1dlUEU3Zz09
 
       std::scoped_lock<std::mutex> lock2(m_lock);
       auto iter = m_finished_threads.begin();
@@ -111,10 +134,30 @@ namespace extract_mkv {
         }
         iter = m_finished_threads.erase(iter);
       }
+      if (stop_flag) {
+        m_is_running = false;
+        spdlog::info("Recieved shutdown..");
+        shutdown();
+      }
     }
   }
 
-  void Timesynchronizer::run() {
+  void TimesynchronizerBase::performance_monitor() {
+    const int monitor_delay{60};
+    int time_delayed;
+    int last_frame_cap;
+    while (m_is_running) {
+      // only tick 1 second at a time so we can stop..
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+      time_delayed += 1;
+      if (m_frames_exported > 0 && time_delayed == monitor_delay)
+        spdlog::info("Performance monitor: {0} fps", static_cast<float>(m_frames_exported - last_frame_cap)/monitor_delay);
+        time_delayed = 0;
+        last_frame_cap = m_frames_exported;
+    }
+  }
+
+  void TimesynchronizerK4A::run() {
 
       m_is_running = true;
       m_monitor_thread = std::thread([=] () {
@@ -122,8 +165,6 @@ namespace extract_mkv {
       });
       // now export frames
       int frame_counter{0};
-      int wait_count{0};
-      std::thread t;
       // DOES NOT WORK FOR SOME RECORDINGS!
       if (m_enable_seek && m_first_frame > 0) {
         for (auto feed : m_input_feeds) {
@@ -132,7 +173,7 @@ namespace extract_mkv {
         frame_counter = m_first_frame;
       }
 
-      while (!m_last_frame || frame_counter <= m_last_frame) {
+      while (m_is_running && (!m_last_frame || frame_counter <= m_last_frame)) {
           try {
 
               // feed forward happens in sync.. processing does not.
@@ -144,11 +185,10 @@ namespace extract_mkv {
                   continue;
               }
               spdlog::debug("Extract Frame: {0}", frame_counter);
-
               /*
-              for (auto feed : m_input_feeds) {
-                feed->extract_frames(frame_counter);
-              }
+                for (auto feed : m_input_feeds) {
+                  feed->extract_frames(frame_counter);
+                }
               */
               for (auto feed : m_input_feeds) {
                 m_sem.wait();
@@ -176,21 +216,27 @@ namespace extract_mkv {
               }
           }
       }
-      m_is_running = false;
-      m_wait_cv.notify_all();
-      spdlog::trace("Waiting for monitor...");
-      m_monitor_thread.join();
-      spdlog::trace("Monitor done...");
-      // wait for worker threads to complete
+      shutdown();
+  }
+  void TimesynchronizerBase::shutdown() {
+    m_is_running = false;
+    m_wait_cv.notify_all();
+    spdlog::trace("Waiting for monitor...");
+    m_monitor_thread.join();
+    spdlog::trace("Monitor done...");
+    // wait for worker threads to complete
 
-      std::scoped_lock<std::mutex> lock(m_lock);
-      for (auto &thread : m_worker_threads) {
-        if (thread.joinable()) {
-          auto id = std::hash<std::thread::id>{}(thread.get_id());
-          spdlog::trace("Waiting for thread.. {0}", id);
-          thread.join();
-          spdlog::trace("Thread Done.. {0}", id);
-        }
+    std::scoped_lock<std::mutex> lock(m_lock);
+    for (auto &thread : m_worker_threads) {
+      if (thread.joinable()) {
+        auto id = std::hash<std::thread::id>{}(thread.get_id());
+        spdlog::trace("Waiting for thread.. {0}", id);
+        thread.join();
+        spdlog::trace("Thread Done.. {0}", id);
       }
+    }
+    // wait for performance thread..
+    // TODO: could take 1 minute.. should we kill it?
+    m_performance_thread.join();
   }
 }

@@ -6,6 +6,12 @@
 #include <extract_mkv/extract_mkv_k4a.h>
 #include "extract_mkv/filesystem.h"
 
+
+#ifdef WITH_PCPD
+#include <extract_mkv/pcpd_file_exporter.h>
+#endif
+
+
 namespace py = pybind11;
 
 namespace extract_mkv {
@@ -32,18 +38,26 @@ namespace extract_mkv {
       .def_readwrite("export_infrared", &ExportConfig::export_infrared)
       .def_readwrite("export_rgbd", &ExportConfig::export_rgbd)
       .def_readwrite("export_pointcloud", &ExportConfig::export_pointcloud)
+      .def_readwrite("export_color_video", &ExportConfig::export_extrinsics)
       .def_readwrite("align_clouds", &ExportConfig::align_clouds)
       .def_readwrite("export_extrinsics", &ExportConfig::export_extrinsics);
 
 
-    py::class_<Timesynchronizer>(m, "Timesynchronizer")
+    py::class_<TimesynchronizerK4A>(m, "TimesynchronizerK4A")
         .def(py::init<const size_t, const size_t,
-             const size_t, ExportConfig, const bool,
+             const size_t, ExportConfig&, const bool,
              const bool>())
-        .def("initialize_feeds", &Timesynchronizer::initialize_feeds)
-        .def("run", &Timesynchronizer::run);
+        .def("initialize_feeds", &TimesynchronizerK4A::initialize_feeds)
+        .def("run", &TimesynchronizerK4A::run);
     py::class_<fs::path>(m, "Path")
         .def(py::init<std::string>());
     py::implicitly_convertible<std::string, fs::path>();
+
+#ifdef WITH_PCPD
+    py::class_<TimesynchronizerPCPD>(m, "TimesynchronizerPCPD")
+        .def(py::init<ExportConfig&>())
+        .def("initialize_feeds", &TimesynchronizerPCPD::initialize_feeds)
+        .def("run", &TimesynchronizerPCPD::run);
+#endif
   }
 }

@@ -26,7 +26,7 @@ namespace KPU {
 
     struct Kinect4AzureCaptureWrapper {
 
-        Kinect4AzureCaptureWrapper();
+        Kinect4AzureCaptureWrapper(std::string);
         ~Kinect4AzureCaptureWrapper() = default;
 
         bool setColorImage(uint64_t device_ts,
@@ -66,5 +66,7 @@ namespace KPU {
 
 
         k4a::capture capture_handle{};
+        int frame_id;
+        std::string m_feed_name;
     };
 }

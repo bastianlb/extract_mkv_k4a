@@ -15,7 +15,7 @@
 
 namespace extract_mkv {
 
-    static void print_raw_calibration(k4a_calibration_t&);
+    void print_raw_calibration(k4a_calibration_t&);
     RectifyMaps process_calibration(k4a_calibration_t, fs::path);
 
     class K4AFrameExtractor {
@@ -50,17 +50,16 @@ namespace extract_mkv {
             RectifyMaps m_rectify_maps;
             std::chrono::microseconds m_timestamp_offset;
     };
-    struct K4AExportWrapper {
+    struct K4ADeviceWrapper {
         RectifyMaps rectify_maps;
-        k4a::capture capture;
         k4a::calibration calibration;
         Eigen::Affine3f m_extrinsics = Eigen::Affine3f::Identity();
     };
-    int process_depth(k4a::image, K4AExportWrapper, fs::path, int);
-    int process_color(k4a::image, K4AExportWrapper, fs::path, int);
-    int process_ir(k4a::image, int);
-    void process_rgbd(k4a::image, k4a::image, K4AExportWrapper, fs::path, int);
-    void process_pointcloud(k4a::image, k4a::image, K4AExportWrapper, fs::path, int, bool align_clouds=false);
-    void process_pose(k4a::image, k4a::image, int);
+    int process_depth(k4a::image, K4ADeviceWrapper, fs::path, int);
+    int process_color(k4a::image, K4ADeviceWrapper, fs::path, int);
+    void process_ir(k4a::image, K4ADeviceWrapper, fs::path, int);
+    void process_rgbd(k4a::image, k4a::image, K4ADeviceWrapper, fs::path, int);
+    void process_pointcloud(k4a::image, k4a::image, K4ADeviceWrapper, fs::path, int, bool align_clouds=false);
+    void process_pose(K4ADeviceWrapper, fs::path, int);
     void compute_undistortion_intrinsics();
 }

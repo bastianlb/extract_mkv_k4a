@@ -7,6 +7,11 @@ Building:
  - ```conan install .. -s build_type=Debug|Release --build "*"```
  - ```cmake .. -DCMAKE_BUILD_TYPE=Debug```
  - ```make```
+
+ Compile with PCPD as in rebuild.sh script (WITH_PCPD=ON PCPD_WS_DIR=..)
+
+for ffmpeg build on ubuntu you may need additional packages:
+apt-get install libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libavresample-dev
  
  Usage:
  - ```source activate_run.sh```

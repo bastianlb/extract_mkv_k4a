@@ -1,7 +1,7 @@
 import os
 
 from mkv_extractor import set_log_level
-from mkv_extractor import Timesynchronizer, ExportConfig, Path as MkvPath
+from mkv_extractor import TimesynchronizerK4A, ExportConfig, Path as MkvPath
 
 
 calibration_config = {
@@ -65,8 +65,8 @@ if __name__ == "__main__":
     set_log_level("trace")
 
     for key, params in calibration_config.items():
-        timesync = Timesynchronizer(first_frame, last_frame, skip_frames,
-                                    export_config, True, False)
+        timesync = TimesynchronizerK4A(first_frame, last_frame, skip_frames,
+                                       export_config, True, False)
 
         base_dir = params["path"]  # noqa
 

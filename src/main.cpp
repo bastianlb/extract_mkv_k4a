@@ -88,7 +88,7 @@ namespace Magnum {
         std::vector<spdlog::sink_ptr> sinks;
         sinks.push_back(std::make_shared<spdlog::sinks::stdout_color_sink_st>());
         sinks.push_back(std::make_shared<spdlog::sinks::daily_file_sink_st>("logfile", 23, 59));
-        auto combined_logger = std::make_shared<spdlog::logger>("name", begin(sinks), end(sinks));
+        auto combined_logger = std::make_shared<spdlog::logger>("combined_logger", begin(sinks), end(sinks));
         //register it if you need to access it globally
         spdlog::register_logger(combined_logger);
 
@@ -116,7 +116,6 @@ namespace Magnum {
         YAML::Node recording_config = config["record"];
         // TODO: currently pcpd works only with start/end TS
         // k4a only with frame based..
-        // move all params to ExportConfig!
 
         if (recording_config["start_ts"]) {
             m_export_config.start_ts = recording_config["start_ts"].as<int64_t>();
@@ -149,6 +148,8 @@ namespace Magnum {
             m_export_config.export_timestamp = true;
           else if (it->as<std::string>() == "color")
             m_export_config.export_color = true;
+          else if (it->as<std::string>() == "color_video")
+            m_export_config.export_color_video = true;
           else if (it->as<std::string>() == "depth")
             m_export_config.export_depth = true;
           else if (it->as<std::string>() == "infrared")
@@ -208,16 +209,16 @@ namespace Magnum {
 
         if (m_file_mode == PCPD) {
 #ifdef WITH_PCPD
-            extract_mkv::PCPDFileExporter ts{m_export_config};
+            extract_mkv::TimesynchronizerPCPD ts{m_export_config};
             ts.initialize_feeds(m_input_feeds, m_output_directory);
             ts.run();
 #else
             spdlog::error("Pcpd exporter not defined. Compile with WITH_PCPD=ON");
 #endif
         } else if (m_file_mode == K4A) {
-            extract_mkv::Timesynchronizer ts{m_first_frame, m_last_frame,
-                                             m_skip_frames, m_export_config, 
-                                             m_timesync, m_enable_seek};
+            extract_mkv::TimesynchronizerK4A ts{m_first_frame, m_last_frame,
+                                                m_skip_frames, m_export_config, 
+                                                m_timesync, m_enable_seek};
             ts.initialize_feeds(m_input_feeds, m_output_directory);
             ts.run();
         } else {

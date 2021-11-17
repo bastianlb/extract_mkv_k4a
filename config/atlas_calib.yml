@@ -2,7 +2,7 @@ record:
   first_frame: 1
   last_frame: 100
   skip_frames: 20
-  input_dir: "/storage/calib_4k/"
+  input_dir: "/data/develop/calib_k4a/recordings"
   feeds:
     - "cn01/capture-000000.mkv"
     - "cn02/capture-000000.mkv"
@@ -11,10 +11,11 @@ record:
   output:
     # - timestamp
     # - depth
-    - color
-      # - rgbd
-      #- pointcloud
-      # - align_clouds 
+    # - color
+    - infrared
+    # - rgbd
+    #- pointcloud
+    # - align_clouds 
   output_dir: "../export_calib"
 timesync: true
 seek: false

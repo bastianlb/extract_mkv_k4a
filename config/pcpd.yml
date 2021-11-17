@@ -1,9 +1,9 @@
 mode: PCPD
 record:
-  start_ts: 1629814129041942590
-  end_ts: 1629814367174431031
+  # start_ts: 1629814129041942590
+  # end_ts: 1629814367174431031
   skip_frames: 1
-  input_dir: "/media/storage/atlas_recordings/210824_animal_trial_02/recordings/recordings_2408_recording_06/"
+  input_dir: "/atlasarchive/atlas/03_animal_trials/210810_animal_trial_01/recordings/recordings_1108_recording_1/"
   feeds:
     - "cn01/"
     - "cn02/"
@@ -11,12 +11,14 @@ record:
     - "cn04/"
   output:
     # - timestamp
-    - color
-    - depth
-    #    - infrared
-    - rgbd
-    - pointcloud
+    # - color
+    - color_video
+    # - depth
+      # - infrared
+      # - rgbd
+    # - pointcloud
     # - align_clouds
+    # - bodypose
   output_dir: "../atlas_export"
 timesync: false
 seek: false

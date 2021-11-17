@@ -124,8 +124,8 @@ set(ENV{LD_LIBRARY_PATH} "${ENV_LD_LIBRARY_PATH_ORG}")
 SET(PYBIND_SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}/src/python_interface.cpp")
 
-pybind11_add_module(${LIB_NAME} ${APP_SOURCES} ${APP_HEADERS} ${PYBIND_SOURCES})
-target_link_libraries(${LIB_NAME} PUBLIC ${MAIN_LIBS})
+pybind11_add_module(${LIB_NAME} ${APP_SOURCES} ${APP_HEADERS} ${PYBIND_SOURCES} ${PCPD_SOURCES} ${PCPD_HEADERS})
+target_link_libraries(${LIB_NAME} PUBLIC ${MAIN_LIBS} ${PCPD_LIBS})
 target_include_directories(${LIB_NAME} PUBLIC "include")
 set_target_properties(${LIB_NAME} PROPERTIES CXX_STANDARD 17)
 # 

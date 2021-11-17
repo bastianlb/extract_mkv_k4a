@@ -1,21 +1,22 @@
 record:
-  first_frame: 0
-  last_frame: 20
+  first_frame: 30
+  last_frame: 50
   skip_frames: 1
-  input_dir: "/storage/holistic_or/"
+  input_dir: "/media/storage/recording_20201207_BodyTracking_3Person_Table/"
   feeds:
     - "cn01/capture.mkv"
-    - "cn02/capture.mkv"
-    - "cn03/capture.mkv"
-    - "cn04/capture.mkv"
+      # - "cn02/capture.mkv"
+      # - "cn03/capture.mkv"
+      # - "cn04/capture.mkv"
   output:
     # - timestamp
-    # - depth
-    # - color
-    # - infrared
-    # - rgbd
+    - depth
+    - color
+      # - infrared
+    - rgbd
     - pointcloud
-    # - align_clouds
-  output_dir: "../output"
+      # - align_clouds
+      # - bodypose
+  output_dir: "../debug_output"
 timesync: true
 seek: false
