@@ -39,10 +39,12 @@ SET(TARGET_NAME extract_mkv)
 SET(PCPD_LIBS)
 
 if(WITH_PCPD)
-    if (NOT DEFINED PCPD_WS_DIR)
-        MESSAGE(FATAL_ERROR "PCPD_WS_DIR needs to be set")
-        # NOTE: PCPD_WS_DIR needs to be set via command line
-        # set(PCPD_WS_DIR /data/develop/pcp_workspace/)
+    if (NOT DEFINED PCPD_DIR)
+        MESSAGE(FATAL_ERROR "PCPD_DIR needs to be set")
+        # NOTE: PCPD_DIR needs to be set via command line
+        # set(PCPD_DIR /data/develop/pcpd/)
+    else()
+      message("Linking PCPD...")
     endif ()
     add_compile_definitions(WITH_PCPD)
 
@@ -60,23 +62,30 @@ if(WITH_PCPD)
 
     SET(PCPD_CUDA_LIBRARIES ${CUDA_LIBRARIES} ${CUDA_CUDA_LIBRARY} ${CUDA_NVRTC_LIB})
 
-    include_directories(${PCPD_WS_DIR}/pcpd/include)
-    include_directories(${PCPD_WS_DIR}/pcpd/include/pcpd)
-    include_directories(${PCPD_WS_DIR}/pcpd/include/pcpd/artekmed)
-    include_directories(${PCPD_WS_DIR}/pcpd/include/pcpd/artekmed/schema)
-    include_directories(${PCPD_WS_DIR}/cmake-build-debug/include)
+    include_directories(${PCPD_DIR}/include)
+    include_directories(${PCPD_DIR}/include/pcpd)
+    include_directories(${PCPD_DIR}/include/pcpd/artekmed)
+    include_directories(${PCPD_DIR}/include/pcpd/artekmed/schema)
+    include_directories(${PCPD_DIR}/build/include)
     include_directories("${CUDA_INCLUDE_DIRS}")
-    link_directories(${PCPD_WS_DIR}/pcpd/build/Debug/lib)
+    link_directories(${PCPD_DIR}/build/lib)
+
+    add_library(ringbuffer STATIC IMPORTED)
+    set_property(TARGET ringbuffer PROPERTY IMPORTED_LOCATION
+      ${PCPD_DIR}/build/lib/libringbuffer.so)
+
+    message("Directories linked...")
 
     SET (PCPD_LIBS
         Threads::Threads
+        ringbuffer
         kj
         capnp
-        ringbuffer
         pcpd
         pcpd_cuda
         ${PCPD_CUDA_LIBRARIES}
     )
+
 SET(PCPD_HEADERS
         "${CMAKE_CURRENT_SOURCE_DIR}/include/extract_mkv/pcpd_file_exporter.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/extract_mkv/kinect4azure_capture_wrapper.h"
@@ -97,9 +106,9 @@ SET(MAIN_LIBS
 )
 
 add_executable(mkvinfo src/mkvinfo.cpp)
-target_link_libraries(mkvinfo PUBLIC Threads::Threads ${CONAN_LIBS} kj capnp pcpd pcpd_cuda ${PCPD_CUDA_LIBRARIES})
+target_link_libraries(mkvinfo PUBLIC ${CONAN_LIBS} ${PCPD_LIBS})
 
-target_link_libraries(${TARGET_NAME} PRIVATE ${MAIN_LIBS} ${PCPD_LIBS})
+target_link_libraries(${TARGET_NAME} PUBLIC ${MAIN_LIBS} ${PCPD_LIBS})
 
 target_include_directories(${TARGET_NAME} PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
@@ -121,16 +130,14 @@ find_package(pybind11 REQUIRED)
 set(PYTHON_HOME ${Python3_STDLIB})
 set(ENV{LD_LIBRARY_PATH} "${ENV_LD_LIBRARY_PATH_ORG}")
 
-SET(PYBIND_SOURCES
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/python_interface.cpp")
+SET(PYBIND_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/python_interface.cpp")
 
 pybind11_add_module(${LIB_NAME} ${APP_SOURCES} ${APP_HEADERS} ${PYBIND_SOURCES} ${PCPD_SOURCES} ${PCPD_HEADERS})
-target_link_libraries(${LIB_NAME} PUBLIC ${MAIN_LIBS} ${PCPD_LIBS})
-target_include_directories(${LIB_NAME} PUBLIC "include")
+target_include_directories(${LIB_NAME} PRIVATE "include")
+target_link_libraries(${LIB_NAME} PRIVATE ${MAIN_LIBS} ${PCPD_LIBS})
 set_target_properties(${LIB_NAME} PROPERTIES CXX_STANDARD 17)
-# 
 # # create in correct destination for inplace use within the build directory
 set_target_properties(${LIB_NAME} PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib/python3.8/lib-dynload)
-# 
+
 set(ENV{LD_LIBRARY_PATH} "${ENV_LD_LIBRARY_PATH_ORG}")
 set(PYTHON_HOME ${Python3_STDLIB})

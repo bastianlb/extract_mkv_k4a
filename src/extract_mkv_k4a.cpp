@@ -344,7 +344,7 @@ namespace extract_mkv {
         if (K4A_RESULT_SUCCEEDED != k4a_image_create(K4A_IMAGE_FORMAT_DEPTH16,
                                                      color_image_width_pixels,
                                                      color_image_height_pixels,
-                                                     color_image_width_pixels * (float)sizeof(uint16_t),
+                                                     color_image_width_pixels * (u_int16_t)sizeof(uint16_t),
                                                      &transformed_depth_image))
         {
             spdlog::error("Failed to create transformed color image");

@@ -24,19 +24,20 @@ class ExportMKVConan(ConanFile):
 
     requires = (
         "opencv/4.5.1@camposs/stable",
-        "eigen/[3.3.9]@camposs/stable",
+        "eigen/3.3.9-r1@camposs/stable",
         "magnum/2020.06@camposs/stable",
         "corrade/2020.06@camposs/stable",
-        "kinect-azure-sensor-sdk/1.4.1@camposs/stable",
+        "kinect-azure-sensor-sdk/1.4.1-r1@camposs/stable",
         "kinect-azure-bodytracking-sdk/1.1.0@vendor/stable",
         "bzip2/1.0.8@conan/stable",
-        "zlib/1.2.11@camposs/stable", # ffmpeg version needs to be overriden
-        "spdlog/1.8.2",
+        "zlib/1.2.11-r1@camposs/stable",  # ffmpeg version needs to be overriden
+        "fmt/8.0.1",
+        "spdlog/1.9.1",
         "yaml-cpp/0.6.3",
         "tbb/2020.3",
         "jsoncpp/1.9.4",
         "happly/cci.20200822",
-         )
+    )
 
     default_options = {
         "opencv:shared": True,
@@ -63,22 +64,22 @@ class ExportMKVConan(ConanFile):
 
     def requirements(self):
         if self.options.with_python:
-                self.requires("python_dev_config/[>=1.0]@camposs/stable")
-                self.requires("pybind11/2.7.1@camposs/stable")
+            self.requires("python_dev_config/[>=1.0]@camposs/stable")
+            self.requires("pybind11/2.7.1@camposs/stable")
         if self.options.with_pcpd:
-            self.requires("Boost/1.75.0@camposs/stable")
-            self.requires("pcl/1.11.1-r1@camposs/stable")
+            self.requires("Boost/1.75.0-r2@camposs/stable")
+            self.requires("pcl/1.11.1-r3@camposs/stable")
             self.requires("rapidjson/1.1.0")
-            self.requires("cuda_dev_config/[1.1]@camposs/stable")
-            self.requires("ringbuffer/0.2.4@artekmed/stable")
-            self.requires("rtsplib/0.1.4@artekmed/stable")
+            self.requires("cuda_dev_config/[>=2.0]@camposs/stable")
+            self.requires("ringbuffer/0.2.7@artekmed/stable")
+            self.requires("rtsplib/0.1.5@artekmed/stable")
             self.requires("enet/1.3.17@camposs/stable")
             self.requires("draco/1.4.1@camposs/stable")
             self.requires("cppfs/1.3.0@camposs/stable")
             self.requires("cereal/1.3.0")
             self.requires("capnproto/0.8.0@camposs/stable")
             self.requires("matroska/1.6.2@camposs/stable")
-            self.requires("libjpeg-turbo/2.0.5")
+            self.requires("libjpeg-turbo/2.1.0")
             self.requires("yuv/1749@camposs/stable")
             self.requires("zdepth/0.1@camposs/stable")
             self.requires("optick/1.3.1.0@camposs/stable")
@@ -86,7 +87,7 @@ class ExportMKVConan(ConanFile):
             self.requires("zmq/4.3.2@camposs/stable")
             self.requires("azmq/1.0.3@camposs/stable")
             self.requires("zstd/1.4.3")
-            self.requires("eventbus/3.0.0-r2@camposs/stable")
+            self.requires("eventbus/3.0.1-r1@camposs/stable")
             self.requires("rttr/0.9.7-dev@camposs/stable")
             self.requires("nvidia-video-codec-sdk/11.0.10@vendor/stable")
 

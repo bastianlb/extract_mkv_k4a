@@ -150,10 +150,12 @@ namespace extract_mkv {
       // only tick 1 second at a time so we can stop..
       std::this_thread::sleep_for(std::chrono::seconds(1));
       time_delayed += 1;
-      if (m_frames_exported > 0 && time_delayed == monitor_delay)
-        spdlog::info("Performance monitor: {0} fps", static_cast<float>(m_frames_exported - last_frame_cap)/monitor_delay);
+      int frames_exported = m_frames_exported / m_export_config.skip_frames;
+      if (frames_exported > 0 && time_delayed >= monitor_delay) {
+        spdlog::info("Performance monitor: {0} fps", static_cast<float>(frames_exported - last_frame_cap)/monitor_delay);
         time_delayed = 0;
-        last_frame_cap = m_frames_exported;
+        last_frame_cap = frames_exported;
+      }
     }
   }
 

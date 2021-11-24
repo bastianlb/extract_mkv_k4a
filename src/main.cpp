@@ -132,8 +132,14 @@ namespace Magnum {
         }
         if (recording_config["skip_frames"]) {
             m_skip_frames = recording_config["skip_frames"].as<int>();
-            m_export_config.skip_frames = m_skip_frames;
             assert(m_skip_frames > 0);
+            m_export_config.skip_frames = m_skip_frames;
+        }
+
+        if (recording_config["max_frame_count"]) {
+            int max_count = recording_config["max_frame_count"].as<int>();
+            assert(max_count > 0);
+            m_export_config.max_frames_exported = max_count;
         }
 
         if (!recording_config["output"].IsSequence()) {

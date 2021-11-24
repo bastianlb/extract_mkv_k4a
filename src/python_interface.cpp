@@ -8,6 +8,7 @@
 
 
 #ifdef WITH_PCPD
+// not sure why ringbuffer is not linked properly
 #include <extract_mkv/pcpd_file_exporter.h>
 #endif
 
@@ -38,10 +39,14 @@ namespace extract_mkv {
       .def_readwrite("export_infrared", &ExportConfig::export_infrared)
       .def_readwrite("export_rgbd", &ExportConfig::export_rgbd)
       .def_readwrite("export_pointcloud", &ExportConfig::export_pointcloud)
-      .def_readwrite("export_color_video", &ExportConfig::export_extrinsics)
+      .def_readwrite("export_color_video", &ExportConfig::export_color_video)
       .def_readwrite("align_clouds", &ExportConfig::align_clouds)
-      .def_readwrite("export_extrinsics", &ExportConfig::export_extrinsics);
-
+      .def_readwrite("timesync", &ExportConfig::timesync)
+      .def_readwrite("export_extrinsics", &ExportConfig::export_extrinsics)
+      .def_readwrite("max_frames_exported", &ExportConfig::max_frames_exported)
+      .def_readwrite("skip_frames", &ExportConfig::skip_frames)
+      .def_readwrite("start_ts", &ExportConfig::start_ts)
+      .def_readwrite("end_ts", &ExportConfig::end_ts);
 
     py::class_<TimesynchronizerK4A>(m, "TimesynchronizerK4A")
         .def(py::init<const size_t, const size_t,

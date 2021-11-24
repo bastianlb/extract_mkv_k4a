@@ -56,7 +56,7 @@ namespace extract_mkv {
   };
   class PCPDFileChannel {
     public:
-      explicit PCPDFileChannel(fs::path, fs::path, std::string, ExportConfig);
+      explicit PCPDFileChannel(fs::path, fs::path, std::string, ExportConfig&);
       bool pcpd_extract_color(std::shared_ptr<KPU::Kinect4AzureCaptureWrapper>, cv::Mat&, bool write=false);
       bool pcpd_extract_depth(std::shared_ptr<KPU::Kinect4AzureCaptureWrapper>, bool write=false);
       bool pcpd_extract_infrared(std::shared_ptr<KPU::Kinect4AzureCaptureWrapper>, bool write=false);
@@ -66,7 +66,7 @@ namespace extract_mkv {
       std::string get_output_dir();
       std::string m_feed_name;
       std::chrono::microseconds m_last_depth_ts;
-      int m_missing_frame_count;
+      int m_missing_frame_count{0};
       uint8_t m_recording_fps{30};
 
     protected:
@@ -96,7 +96,7 @@ namespace extract_mkv {
       template <typename F>
       void run_threaded(const F* func, std::shared_ptr<PCPDFileChannel>, std::shared_ptr<KPU::Kinect4AzureCaptureWrapper>, int);
       int64_t get_frame_from_timestamp(int64_t);
-      void monitor_frame_map();
+      void monitor_frame_map(bool flush=false);
       int m_max_frames_exported = std::numeric_limits<int>::max();
 
     protected:

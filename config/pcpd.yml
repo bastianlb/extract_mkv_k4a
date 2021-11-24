@@ -1,9 +1,10 @@
 mode: PCPD
 record:
-  # start_ts: 1629814129041942590
-  # end_ts: 1629814367174431031
+  start_ts: 1632804955682321998
+  end_ts: 1632805075983893801
   skip_frames: 1
-  input_dir: "/atlasarchive/atlas/03_animal_trials/210810_animal_trial_01/recordings/recordings_1108_recording_1/"
+  max_frame_count: 300
+  input_dir: "/media/storage/atlas_recordings/recordings_2809_recording_2"
   feeds:
     - "cn01/"
     - "cn02/"
@@ -19,6 +20,6 @@ record:
     # - pointcloud
     # - align_clouds
     # - bodypose
-  output_dir: "../atlas_export"
+  output_dir: "/media/storage/atlas_export/"
 timesync: false
 seek: false

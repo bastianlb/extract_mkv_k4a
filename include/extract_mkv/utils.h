@@ -2,6 +2,7 @@
 
 #include <thread>
 #include <spdlog/spdlog.h>
+#include "spdlog/fmt/ostr.h"
 #include <opencv2/opencv.hpp>
 #include <opencv2/imgcodecs.hpp>
 
@@ -24,11 +25,31 @@ namespace extract_mkv {
       bool align_clouds{false};
       bool export_extrinsics{false};
       bool export_bodypose{false};
-      bool export_color_video{true};
+      bool export_color_video{false};
+      bool timesync{true};
+      uint64_t max_frames_exported{std::numeric_limits<std::uint64_t>::max()};
       uint64_t start_ts{0};
       uint64_t end_ts{std::numeric_limits<std::uint64_t>::max()};
       size_t skip_frames{1};
+      friend std::ostream &operator<<(std::ostream &os, const ExportConfig &c) {
+            return os << "[ExportConfig: " 
+                << "timestamps=" << c.export_timestamp << "\n"
+                << "color=" << c.export_color << "\n"
+                << "depth=" << c.export_depth << "\n"
+                << "IR=" << c.export_infrared << "\n"
+                << "RGBD=" << c.export_rgbd << "\n"
+                << "pointclouds=" << c.export_pointcloud << "\n"
+                << "align_clouds=" << c.align_clouds << "\n"
+                << "extrinsics=" << c.export_extrinsics << "\n"
+                << "bodypose=" << c.export_bodypose << "\n"
+                << "color_video=" << c.export_color_video<< "\n"
+                << "timesync=" << c.timesync << "\n"
+                << "timerange=[" << c.start_ts << ", " << c.end_ts << "]\n"
+                << "skip_frames=" << c.skip_frames << "\n"
+                "]";
+        }
     };
+
 
     struct RectifyMaps {
         cv::Mat depth_map_x;
@@ -107,12 +128,16 @@ namespace extract_mkv {
                     //cv::resize(frames.at(feed_id), output(crop), cv::Size(w2, h2), cv::INTER_LINEAR);
                     ++el;
                 }
+                using namespace std::chrono;
 
-                auto time_point = std::chrono::system_clock::time_point(timestamp);
-                auto in_time_t = std::chrono::system_clock::to_time_t(time_point);
+                auto time_point = system_clock::time_point(timestamp);
+                auto in_time_t = system_clock::to_time_t(time_point);
 
                 std::stringstream ss;
-                ss << std::put_time(std::gmtime(&in_time_t), "%Y-%m-%d %X %Z");
+                ss << std::put_time(std::gmtime(&in_time_t), "%m-%d %H:%M:%S,");
+                // apparently put_time doesn't format milliseconds
+                ss << std::to_string(duration_cast<milliseconds>(timestamp).count() % 1000);
+                ss << " UTC";
 
                 //cv::imwrite(m_filename + std::to_string(m_frame_count) + ".jpg", output);
                 spdlog::debug("Writing video frame...{0}, {1}");
@@ -122,7 +147,7 @@ namespace extract_mkv {
                 }
                 cv::cvtColor(output, output, cv::COLOR_RGBA2RGB);
                 cv::putText(output, ss.str(), cv::Point(w * 0.62, h * 0.95), cv::FONT_HERSHEY_DUPLEX, 1, cv::Scalar(255,255,255), 2);
-                cv::putText(output, std::to_string(timestamp.count()), cv::Point(w * 0.70, h * 0.9), cv::FONT_HERSHEY_DUPLEX, 1, cv::Scalar(255,255,255), 2);
+                //cv::putText(output, std::to_string(timestamp.count()), cv::Point(w * 0.70, h * 0.9), cv::FONT_HERSHEY_DUPLEX, 1, cv::Scalar(255,255,255), 2);
                 m_writer.write(output);
                 m_frame_count++;
             };
