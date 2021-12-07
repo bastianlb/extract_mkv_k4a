@@ -7,6 +7,7 @@
 #include <opencv2/imgcodecs.hpp>
 
 namespace extract_mkv {
+    using namespace std::chrono;
     struct MissingDataException : public std::exception
     {
       const char * what () const throw ()
@@ -16,22 +17,22 @@ namespace extract_mkv {
     };
 
     struct ExportConfig {
-      bool export_timestamp{false};
-      bool export_color{false};
-      bool export_depth{false};
-      bool export_infrared{false};
-      bool export_rgbd{false};
-      bool export_pointcloud{false};
-      bool align_clouds{false};
-      bool export_extrinsics{false};
-      bool export_bodypose{false};
-      bool export_color_video{false};
-      bool timesync{true};
-      uint64_t max_frames_exported{std::numeric_limits<std::uint64_t>::max()};
-      uint64_t start_ts{0};
-      uint64_t end_ts{std::numeric_limits<std::uint64_t>::max()};
-      size_t skip_frames{1};
-      friend std::ostream &operator<<(std::ostream &os, const ExportConfig &c) {
+        bool export_timestamp{false};
+        bool export_color{false};
+        bool export_depth{false};
+        bool export_infrared{false};
+        bool export_rgbd{false};
+        bool export_pointcloud{false};
+        bool align_clouds{false};
+        bool export_extrinsics{false};
+        bool export_bodypose{false};
+        bool export_color_video{false};
+        bool timesync{true};
+        uint64_t max_frames_exported{std::numeric_limits<std::uint64_t>::max()};
+        nanoseconds start_ts{0};
+        nanoseconds end_ts{(time_point<system_clock>::max()).time_since_epoch()};
+        size_t skip_frames{1};
+        friend std::ostream &operator<<(std::ostream &os, const ExportConfig &c) {
             return os << "[ExportConfig: " 
                 << "timestamps=" << c.export_timestamp << "\n"
                 << "color=" << c.export_color << "\n"
@@ -44,7 +45,7 @@ namespace extract_mkv {
                 << "bodypose=" << c.export_bodypose << "\n"
                 << "color_video=" << c.export_color_video<< "\n"
                 << "timesync=" << c.timesync << "\n"
-                << "timerange=[" << c.start_ts << ", " << c.end_ts << "]\n"
+                << "timerange=[" << c.start_ts.count() << ", " << c.end_ts.count() << "]\n"
                 << "skip_frames=" << c.skip_frames << "\n"
                 "]";
         }
@@ -61,6 +62,9 @@ namespace extract_mkv {
     struct ProcessedData {
         std::string feed_name;
         cv::Mat color_image;
+        cv::Mat depth_image;
+        cv::Mat ir_image;
+        int frame_id;
         std::chrono::microseconds timestamp_us;
     };
 
@@ -136,7 +140,7 @@ namespace extract_mkv {
                 std::stringstream ss;
                 ss << std::put_time(std::gmtime(&in_time_t), "%m-%d %H:%M:%S,");
                 // apparently put_time doesn't format milliseconds
-                ss << std::to_string(duration_cast<milliseconds>(timestamp).count() % 1000);
+                ss << fmt::format("{0:06d}", duration_cast<milliseconds>(timestamp).count() % 1000);
                 ss << " UTC";
 
                 //cv::imwrite(m_filename + std::to_string(m_frame_count) + ".jpg", output);

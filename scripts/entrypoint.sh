@@ -12,9 +12,8 @@ fi
 
 source activate_run.sh
 export PYTHONPATH=/extract_mkv/build/lib/ 
-export CUDA_VISIBLE_DEVICES=0,1
+export CUDA_VISIBLE_DEVICES=0
 exec python3 /deploy/color_frames.py
-
 
 while true
 do

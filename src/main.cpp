@@ -118,10 +118,10 @@ namespace Magnum {
         // k4a only with frame based..
 
         if (recording_config["start_ts"]) {
-            m_export_config.start_ts = recording_config["start_ts"].as<int64_t>();
+            m_export_config.start_ts = std::chrono::nanoseconds{recording_config["start_ts"].as<int64_t>()};
         }
         if (recording_config["end_ts"]) {
-            m_export_config.end_ts = recording_config["end_ts"].as<int64_t>();
+            m_export_config.end_ts = std::chrono::nanoseconds{recording_config["end_ts"].as<int64_t>()};
         }
 
         if (recording_config["first_frame"]) {

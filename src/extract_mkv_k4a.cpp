@@ -51,6 +51,7 @@ namespace extract_mkv {
             }
             m_timestamp_file << m_tsss.str() << std::endl;
         }
+
         if (m_export_config.export_pointcloud || m_export_config.export_extrinsics) {
             fs::path extrinsic_path = m_input_filename.parent_path() / "world2camera.json";
             std::ifstream ifs { extrinsic_path.c_str() };
@@ -176,9 +177,9 @@ namespace extract_mkv {
             const k4a::image input_color_image = m_capture.get_color_image();
             const k4a::image input_ir_image = m_capture.get_ir_image();
             m_worker_lock.unlock();
-            K4ADeviceWrapper wrapper;
-            wrapper.rectify_maps = m_rectify_maps;
-            wrapper.calibration = m_calibration;
+            std::shared_ptr<K4ADeviceWrapper> wrapper;
+            wrapper->rectify_maps = m_rectify_maps;
+            wrapper->calibration = m_calibration;
             spdlog::info("Processing {0} : {1}", m_name, frame_counter);
             record_timestamps(input_color_image, input_depth_image, frame_counter);
             if (m_export_config.export_depth && input_depth_image.is_valid()) {
@@ -229,7 +230,7 @@ namespace extract_mkv {
         }
     }
 
-    int process_depth(k4a::image input_depth_image, K4ADeviceWrapper device_wrapper, fs::path output_directory, int frame_counter) {
+    int process_depth(k4a::image input_depth_image, std::shared_ptr<K4ADeviceWrapper> device_wrapper, fs::path output_directory, int frame_counter) {
         if (input_depth_image.is_valid()) {
             spdlog::debug("K4A processing depth image {0}", frame_counter);
             uint timestamp = input_depth_image.get_system_timestamp().count();
@@ -242,8 +243,8 @@ namespace extract_mkv {
                                                const_cast<void *>(static_cast<const void *>(input_depth_image.get_buffer())),
                                                static_cast<size_t>(input_depth_image.get_stride_bytes()));
                 cv::Mat undistorted_image;
-                cv::remap(image_buffer, undistorted_image, device_wrapper.rectify_maps.depth_map_x,
-                          device_wrapper.rectify_maps.depth_map_y, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
+                cv::remap(image_buffer, undistorted_image, device_wrapper->rectify_maps.depth_map_x,
+                          device_wrapper->rectify_maps.depth_map_y, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
                 std::ostringstream ss;
                 ss << std::setw(10) << std::setfill('0') << frame_counter << "_depth.tiff";
                 std::string image_path = output_directory / ss.str();
@@ -262,7 +263,7 @@ namespace extract_mkv {
         }
     }
 
-    int process_color(k4a::image input_color_image, K4ADeviceWrapper device_wrapper, fs::path output_directory, int frame_counter) {
+    int process_color(k4a::image input_color_image, std::shared_ptr<K4ADeviceWrapper> device_wrapper, fs::path output_directory, int frame_counter) {
         if (input_color_image.is_valid()) {
             spdlog::debug("K4A processing color image {0}", frame_counter);
             cv::Mat undistorted_image;
@@ -283,8 +284,8 @@ namespace extract_mkv {
                 cv::Mat image_buffer = cv::Mat(cv::Size(w, h), CV_8UC4,
                                                const_cast<void*>(static_cast<const void *>(input_color_image.get_buffer())),
                                                static_cast<size_t>(input_color_image.get_stride_bytes()));
-                cv::remap(image_buffer, undistorted_image, device_wrapper.rectify_maps.color_map_x,
-                          device_wrapper.rectify_maps.color_map_y, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
+                cv::remap(image_buffer, undistorted_image, device_wrapper->rectify_maps.color_map_x,
+                          device_wrapper->rectify_maps.color_map_y, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
 
                 ss << std::setw(10) << std::setfill('0') << frame_counter << "_color.jpg";
                 fs::path image_path = output_directory / ss.str();
@@ -308,8 +309,8 @@ namespace extract_mkv {
                     // Error reading raw image data
                     throw MissingDataException();
                 }
-                cv::remap(image_buffer, undistorted_image, device_wrapper.rectify_maps.color_map_x,
-                          device_wrapper.rectify_maps.color_map_y, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
+                cv::remap(image_buffer, undistorted_image, device_wrapper->rectify_maps.color_map_x,
+                          device_wrapper->rectify_maps.color_map_y, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
                 ss << std::setw(10) << std::setfill('0') << frame_counter << "_color.jpg";
                 fs::path image_path = output_directory / ss.str();
                 cv::imwrite(image_path, undistorted_image, compression_params);
@@ -330,7 +331,7 @@ namespace extract_mkv {
 
     void process_rgbd(k4a::image input_color_image,
                       k4a::image input_depth_image,
-                      K4ADeviceWrapper device_wrapper,
+                      std::shared_ptr<K4ADeviceWrapper> device_wrapper,
                       fs::path output_directory, int frame_counter) {
 
         int color_image_width_pixels = k4a_image_get_width_pixels(input_color_image.handle());
@@ -352,7 +353,7 @@ namespace extract_mkv {
             throw MissingDataException();
         }
 
-        k4a_transformation_t transformation = k4a_transformation_create(&device_wrapper.calibration);
+        k4a_transformation_t transformation = k4a_transformation_create(&device_wrapper->calibration);
         if (K4A_RESULT_SUCCEEDED !=
                 k4a_transformation_depth_image_to_color_camera(transformation, input_depth_image.handle(),
                                                                transformed_depth_image))
@@ -375,8 +376,8 @@ namespace extract_mkv {
         spdlog::info("RGBD min: {0}, max: {1}", minVal, maxVal);
         cv::Mat undistorted_image;
         // undistort using color image rectify maps?
-        cv::remap(image_buffer, undistorted_image, device_wrapper.rectify_maps.color_map_x,
-                  device_wrapper.rectify_maps.color_map_y, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
+        cv::remap(image_buffer, undistorted_image, device_wrapper->rectify_maps.color_map_x,
+                  device_wrapper->rectify_maps.color_map_y, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
 
         cv::imwrite(image_path, undistorted_image);
         std::ostringstream s;
@@ -389,7 +390,7 @@ namespace extract_mkv {
 
     void process_pointcloud(k4a::image input_color_image,
                             k4a::image input_depth_image,
-                            K4ADeviceWrapper device_wrapper,
+                            std::shared_ptr<K4ADeviceWrapper> device_wrapper,
                             fs::path output_directory,
                             int frame_counter,
                             bool align_clouds) {
@@ -453,7 +454,7 @@ namespace extract_mkv {
             throw MissingDataException();
         }
 
-        k4a_transformation_t transformation = k4a_transformation_create(&device_wrapper.calibration);
+        k4a_transformation_t transformation = k4a_transformation_create(&device_wrapper->calibration);
         if (K4A_RESULT_SUCCEEDED !=
                 k4a_transformation_color_image_to_depth_camera(transformation, input_depth_image.handle(), color_image.handle(), transformed_color_image))
         {
@@ -483,7 +484,7 @@ namespace extract_mkv {
         TODO: not currently in framework
         if (align_clouds) {
             for (auto &point : points) {
-                point.xyz = device_wrapper.world2camera * point.xyz;
+                point.xyz = device_wrapper->world2camera * point.xyz;
             }
         }*/
 
@@ -502,7 +503,7 @@ namespace extract_mkv {
     }
 
     void process_ir(k4a::image input_ir_image,
-                   K4ADeviceWrapper device_wrapper,
+                   std::shared_ptr<K4ADeviceWrapper> device_wrapper,
                    fs::path output_directory, int frame_counter) {
         {
             if (input_ir_image.is_valid()) {
@@ -537,17 +538,17 @@ namespace extract_mkv {
         }
     }
 
-    void process_pose(K4ADeviceWrapper device_wrapper,
+    void process_pose(std::shared_ptr<K4ADeviceWrapper> device_wrapper,
                       fs::path output_directory, int frame_counter) {
     };
     /*
-    void process_pose(K4ADeviceWrapper device_wrapper,
+    void process_pose(std::shared_ptr<K4ADeviceWrapper> device_wrapper,
                       fs::path output_directory, int frame_counter) {
         k4abt_tracker_configuration_t tracker_config = K4ABT_TRACKER_CONFIG_DEFAULT;
         // tracker_config.sensor_orientation = K4ABT_SENSOR_ORIENTATION_FLIP180;
-        auto tracker = k4abt::tracker::create(device_wrapper.calibration, tracker_config);
+        auto tracker = k4abt::tracker::create(device_wrapper->calibration, tracker_config);
 
-            if (tracker.enqueue_capture(device_wrapper.capture)) {
+            if (tracker.enqueue_capture(device_wrapper->capture)) {
                 k4abt::frame bodyFrame = tracker.pop_result();
                 Json::Value bodies(Json::arrayValue);
                 if (bodyFrame != nullptr && bodyFrame.get_num_bodies() > 0) {

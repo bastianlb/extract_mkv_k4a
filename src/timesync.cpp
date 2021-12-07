@@ -136,7 +136,7 @@ namespace extract_mkv {
       }
       if (stop_flag) {
         m_is_running = false;
-        spdlog::info("Recieved shutdown..");
+        spdlog::info("Recieved shutdown request..");
         shutdown();
       }
     }

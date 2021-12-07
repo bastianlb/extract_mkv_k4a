@@ -1,6 +1,7 @@
 #include <spdlog/spdlog.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <pybind11/chrono.h>
 
 #include <extract_mkv/timesync.h>
 #include <extract_mkv/extract_mkv_k4a.h>
@@ -57,6 +58,7 @@ namespace extract_mkv {
     py::class_<fs::path>(m, "Path")
         .def(py::init<std::string>());
     py::implicitly_convertible<std::string, fs::path>();
+    // py::implicitly_convertible<uint64_t, std::chrono::nanoseconds>();
 
 #ifdef WITH_PCPD
     py::class_<TimesynchronizerPCPD>(m, "TimesynchronizerPCPD")

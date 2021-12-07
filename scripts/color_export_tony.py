@@ -1,10 +1,11 @@
 import os
+from datetime import timedelta
 
 from mkv_extractor import set_log_level
 from mkv_extractor import TimesynchronizerPCPD, ExportConfig, Path as MkvPath
 
 
-INPUT_DIR = "/atlasarchive/atlas/03_animal_trials/210810_animal_trial_01/recordings/"
+INPUT_DIR = "/media/storage/atlas_recordings/"
 
 if __name__ == "__main__":
     print("Color Video export")
@@ -15,13 +16,13 @@ if __name__ == "__main__":
     export_config.skip_frames = 30
     # TODO: start end must be recording dependent...
     #                        1628650257725706448
-    export_config.start_ts = 1628651055148343000
-    export_config.end_ts =   1628653016064450000
+    # export_config.start_ts = timedelta(microseconds=1628651055148343000 // 1000)
+    #export_config.end_ts =   timedelta(microseconds=1628653016064450000 // 1000)
     #                        1628658895596854977
 
     set_log_level("info")
 
-    for base_dir in ["recordings_1108_recording_1"]:  #, "recordings_2809_recording_5"]:
+    for base_dir in ["recordings_2809_recording_2"]:  #, "recordings_2809_recording_5"]:
         print("Exporting color frames for: ", base_dir)
 
         timesync = TimesynchronizerPCPD(export_config)
