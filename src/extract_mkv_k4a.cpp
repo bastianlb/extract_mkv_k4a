@@ -252,7 +252,9 @@ namespace extract_mkv {
                 std::ostringstream s;
                 s << std::setw(10) << std::setfill('0') << frame_counter << "_distorted_depth.tiff";
                 image_path = output_directory / s.str();
-                //cv::imwrite(image_path, image_buffer);
+                cv::Mat image;
+                image_buffer.convertTo(image, CV_8UC1);
+                cv::imwrite(image_path, image);
             } else {
                 spdlog::warn("Received depth frame with unexpected format: {0}", input_depth_image.get_format());
                 throw MissingDataException();
@@ -524,6 +526,7 @@ namespace extract_mkv {
                     std::ostringstream ss;
                     ss << std::setw(10) << std::setfill('0') << frame_counter << "_ir.tiff";
                     fs::path image_path = output_directory / ss.str();
+                    cv::normalize(image_buffer, image_buffer, 0, 255, cv::NORM_MINMAX);
                     cv::imwrite(image_path, image_buffer);
 
                 } else {

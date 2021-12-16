@@ -5,6 +5,9 @@
 #include "spdlog/fmt/ostr.h"
 #include <opencv2/opencv.hpp>
 #include <opencv2/imgcodecs.hpp>
+#include <opencv2/core/cuda.hpp>
+#include <opencv2/cudawarping.hpp>
+#include <opencv2/cudaimgproc.hpp>
 
 namespace extract_mkv {
     using namespace std::chrono;
@@ -32,6 +35,17 @@ namespace extract_mkv {
         nanoseconds start_ts{0};
         nanoseconds end_ts{(time_point<system_clock>::max()).time_since_epoch()};
         size_t skip_frames{1};
+        bool process_color() {
+            return export_color  || export_color_video || export_pointcloud || export_rgbd;
+        }
+        bool process_depth() {
+            return export_depth || export_pointcloud || export_rgbd;
+
+        }
+        bool process_infrared() {
+            return export_infrared || export_bodypose;
+        }
+
         friend std::ostream &operator<<(std::ostream &os, const ExportConfig &c) {
             return os << "[ExportConfig: " 
                 << "timestamps=" << c.export_timestamp << "\n"
@@ -59,13 +73,15 @@ namespace extract_mkv {
         cv::Mat color_map_y;
     };
 
-    struct ProcessedData {
-        std::string feed_name;
-        cv::Mat color_image;
-        cv::Mat depth_image;
-        cv::Mat ir_image;
-        int frame_id;
-        std::chrono::microseconds timestamp_us;
+    class ProcessedData {
+        public:
+            explicit ProcessedData() = default;
+            std::string feed_name;
+            cv::cuda::GpuMat color_image;
+            cv::Mat depth_image;
+            cv::Mat ir_image;
+            int frame_id;
+            std::chrono::microseconds timestamp_us;
     };
 
     class PCPDVideoWriter {
@@ -83,18 +99,18 @@ namespace extract_mkv {
                 return m_writer.open(m_filename, codec, fps, m_video_size, true);
             };
 
-            void write_frames(std::map<int, cv::Mat>& frames, std::chrono::microseconds timestamp) {
+            void write_frames(std::map<int, cv::cuda::GpuMat>& frames, std::chrono::microseconds timestamp) {
                 if (!m_writer.isOpened()) {
                     spdlog::error("Video file not open!");
                     return;
                 }
-                cv::Mat output(m_video_size, CV_8UC4, cv::Scalar(0, 0, 0));
+                cv::cuda::GpuMat output(m_video_size, CV_8UC4);
                 if (frames.size() == 0) {
                     spdlog::error("Writing frames != 4 not currently supported.");
                     return;
                 }
-                const int w = output.size[1];
-                const int h = output.size[0];
+                const int w = m_video_size.width;
+                const int h = m_video_size.height;
                 const int w2 = static_cast<int>(w/2);
                 const int h2 = static_cast<int>(h/2);
                 auto el = frames.begin();
@@ -121,13 +137,14 @@ namespace extract_mkv {
                             continue;
                     }
                     spdlog::trace("Cropping region for feed {0}: {1}, {2}, w: {3} h: {4} of image with dim {5}, {6}",
-                            feed_id, crop.x, crop.y, crop.width, crop.height, output.size[1], output.size[0]);
+                            feed_id, crop.x, crop.y, crop.width, crop.height, w, h);
                     assert(crop.width != 0 && crop.height != 0);
                     threads.push_back(std::thread([crop, &w2, &h2]
-                                (const std::map<int, cv::Mat> &in_frames, cv::Mat &out_frame, const int feed_id) {
+                                (const std::map<int, cv::cuda::GpuMat> &in_frames, cv::cuda::GpuMat &out_frame, const int feed_id) {
+                        spdlog::debug("Thread copying to video frame for feed {0}..", feed_id);
                         // TODO: is this threadsafe? the regions shouldn't overlap..
                         //spdlog::info(0 <= crop.width && crop.x + crop.width <= out_frame.cols && 0 <= crop.y && 0 <= crop.height && crop.y + crop.height <= out_frame.rows
-                        cv::resize(in_frames.at(feed_id), out_frame(crop), cv::Size(w2, h2), cv::INTER_LINEAR);
+                        cv::cuda::resize(in_frames.at(feed_id), out_frame(crop), cv::Size(w2, h2), cv::INTER_LINEAR);
                     }, std::ref(frames), std::ref(output), feed_id));
                     //cv::resize(frames.at(feed_id), output(crop), cv::Size(w2, h2), cv::INTER_LINEAR);
                     ++el;
@@ -140,19 +157,21 @@ namespace extract_mkv {
                 std::stringstream ss;
                 ss << std::put_time(std::gmtime(&in_time_t), "%m-%d %H:%M:%S,");
                 // apparently put_time doesn't format milliseconds
-                ss << fmt::format("{0:06d}", duration_cast<milliseconds>(timestamp).count() % 1000);
+                ss << fmt::format("{0:03d}", duration_cast<milliseconds>(timestamp).count() % 1000);
                 ss << " UTC";
 
                 //cv::imwrite(m_filename + std::to_string(m_frame_count) + ".jpg", output);
-                spdlog::debug("Writing video frame...{0}, {1}");
                 for (auto &t : threads) {
                     if (t.joinable())
                         t.join();
                 }
-                cv::cvtColor(output, output, cv::COLOR_RGBA2RGB);
-                cv::putText(output, ss.str(), cv::Point(w * 0.62, h * 0.95), cv::FONT_HERSHEY_DUPLEX, 1, cv::Scalar(255,255,255), 2);
+                cv::cuda::cvtColor(output, output, cv::COLOR_RGBA2RGB);
+                cv::Mat out_frame_device(m_video_size, CV_8UC3);
                 //cv::putText(output, std::to_string(timestamp.count()), cv::Point(w * 0.70, h * 0.9), cv::FONT_HERSHEY_DUPLEX, 1, cv::Scalar(255,255,255), 2);
-                m_writer.write(output);
+                output.download(out_frame_device);
+                spdlog::debug("Write video frame for timestamp {0}", timestamp.count());
+                cv::putText(out_frame_device, ss.str(), cv::Point(w * 0.62, h * 0.95), cv::FONT_HERSHEY_DUPLEX, 1, cv::Scalar(255,255,255), 2);
+                m_writer.write(out_frame_device);
                 m_frame_count++;
             };
             ~PCPDVideoWriter() {

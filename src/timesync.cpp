@@ -117,7 +117,7 @@ namespace extract_mkv {
     while (m_is_running) {
       spdlog::trace("Cleaning up threads.."); 
       std::unique_lock<std::mutex> lock1(m_thread_free_lock);
-      m_wait_cv.wait(lock1);https://zoom.us/j/8185306906?pwd=YXgwd1JKMjFTd0xRRXNPc1dlUEU3Zz09
+      m_wait_cv.wait(lock1);
 
       std::scoped_lock<std::mutex> lock2(m_lock);
       auto iter = m_finished_threads.begin();

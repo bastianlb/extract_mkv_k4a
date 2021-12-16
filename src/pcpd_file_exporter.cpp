@@ -5,19 +5,19 @@
 #include <numeric>
 #include <spdlog/spdlog.h>
 
+#include <opencv2/cudaarithm.hpp>
+
 #include "extract_mkv/pcpd_file_exporter.h"
 #include "extract_mkv/kinect4azure_capture_wrapper.h"
 #include "extract_mkv/timesync.h"
 #include "extract_mkv/extract_mkv_k4a.h"
-#include "pcpd/processing/nvcodec/NvDecoder.h"
-#include "pcpd/processing/nvcodec/ColorSpace.h"
-#include "pcpd/processing/nvcodec/NvCodecUtils.h"
 #include "pcpd/processing/cuda/detail/error_handling.cuh"
 #include "pcpd/processing/cuda/detail/hardware.cuh"
 #include "pcpd/processing/cuda/detail/developer_tools.cuh"
 #include "pcpd/util/cuda_device_scope.h"
 #include "pcpd/processing/nvcodec/NvCodecUtils.h"
 #include "pcpd/processing/nvcodec/ColorSpace.h"
+#include "pcpd/processing/nvcodec/NvDecoder.h"
 
 using namespace pcpd;
 using namespace pcpd::record;
@@ -36,7 +36,8 @@ namespace extract_mkv {
     : TimesynchronizerBase(export_config) {
       spdlog::info("Starting timesynchronized PCPD exported");
       spdlog::info(export_config);
-      if (m_export_config.export_color || m_export_config.export_color_video) {
+      if (m_export_config.process_color() || m_export_config.process_infrared()) {
+        // properly init cuda device
         int gpu_id = pcpd::processing::cuda::initCudaDevice(-1);
 
         spdlog::info("gpu-id: {0}", gpu_id);
@@ -71,8 +72,8 @@ namespace extract_mkv {
         };
       }
       int fps_mult = 10;
-      float fps = (1 / static_cast<float>(m_input_feeds[0]->m_recording_fps)) * pow(10, 6);
-      m_sync_window = std::chrono::microseconds(static_cast<uint64_t>(SYNC_WINDOW * fps));
+      float fpns = (1 / m_input_feeds[0]->m_recording_fps) * pow(10, 6);
+      m_sync_window = std::chrono::microseconds(static_cast<uint64_t>(SYNC_WINDOW * fpns));
   };
 
   void TimesynchronizerPCPD::run() {
@@ -138,7 +139,11 @@ namespace extract_mkv {
           continue;
         }
         // check if frame has appeared before... probably shouldn't
-        assert(m_frame_map.find(frame_id) == m_frame_map.end());
+        if (m_frame_map.find(frame_id) != m_frame_map.end()) {
+          spdlog::warn("Duplicate frame {0} detected according to timestamping.. skipping", frame_id);
+          continue;
+        }
+
         m_frame_map_lock.lock();
         for (auto feed : m_input_feeds) {
            process_feed(feed, feed->m_processed_data, frame_id);
@@ -155,27 +160,31 @@ namespace extract_mkv {
 
   void TimesynchronizerPCPD::advance_feed(std::shared_ptr<PCPDFileChannel> feed) {
     using namespace std::chrono;
-    // note: lifecycle is not managed by this function. They are stored and cleaned up later.
+    // naive counter for debug export
+    feed->m_frame_counter = m_frames_exported;
     bool ts_exported = false;
     // create wrappers to get transformation / calibration handles
     microseconds image_timestamp;
+    // note: lifecycle is not managed by this function. They are stored and cleaned up later.
     feed->m_processed_data = std::make_shared<ProcessedData>();
     feed->m_processed_data->feed_name = feed->m_feed_name;
-    if (m_export_config.export_color  || m_export_config.export_color_video) {
+    if (m_export_config.process_color()) {
       if (feed->pcpd_extract_color(feed->m_processed_data->color_image, image_timestamp)) {
         ts_exported = true;
       }
     }
-    if (m_export_config.export_depth) {
-      if (feed->pcpd_extract_depth(feed->m_processed_data->depth_image, image_timestamp)) {
+    if (m_export_config.process_depth()) {
+      if (feed->pcpd_extract_depth(feed->m_processed_data->depth_image, image_timestamp, true)) {
         // TODO: we want to use actual depth timecode timestamps at some point..
         // need to get these out of the mkvs
         ts_exported = true;
       }
     }
 
-    if (m_export_config.export_infrared) {
-      feed->pcpd_extract_infrared(feed->m_processed_data->ir_image);
+    if (m_export_config.process_infrared()) {
+      if (feed->pcpd_extract_infrared(feed->m_processed_data->ir_image, image_timestamp, true)) {
+        ts_exported = true;
+      }
     }
 
     if (ts_exported) {
@@ -208,16 +217,17 @@ namespace extract_mkv {
       return true;
     }
 
-    if (m_export_config.export_color || m_export_config.export_rgbd ||
-        m_export_config.export_pointcloud || m_export_config.export_color_video) {
+    if (m_export_config.process_color()) {
       // color needs to be set on wrapper
       uint64_t depth_ts_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(data->timestamp_us).count();
       size_t stride = (data->color_image.cols * data->color_image.elemSize());
       size_t nbytes = stride * data->color_image.rows;
+      cv::Mat image;
+      data->color_image.download(image);
       bool ret = k4a_wrapper->setColorImage(depth_ts_ns,
                                             depth_ts_ns, feed->m_color_image_width,
                                             feed->m_color_image_height, stride,
-                                            (void*) (data->color_image.data),
+                                            (void*) (image.data),
                                             nbytes, feed->m_color_pixel_format);
 
       if (!ret)
@@ -225,10 +235,9 @@ namespace extract_mkv {
 
     }
 
-    if (m_export_config.export_depth || m_export_config.export_rgbd || m_export_config.export_pointcloud
-        || m_export_config.export_bodypose) {
+    uint64_t depth_ts_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(data->timestamp_us).count();
+    if (m_export_config.process_depth()) {
       // depth needs to be set on wrapper
-      uint64_t depth_ts_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(data->timestamp_us).count();
       uint8 bits_per_element = 16;
       size_t stride = (feed->m_depth_image_width * bits_per_element) / 8;
       size_t nbytes = stride * feed->m_depth_image_height;
@@ -242,44 +251,45 @@ namespace extract_mkv {
 
     }
 
-    if (m_export_config.export_infrared || m_export_config.export_bodypose) {
-      // ir needs to be set on wrapper
-      // TODO: pcpd uses depth image dims for the IR image. Is this correct?
-      /*
-      bool ret = wrapper->setInfraredImage(block.data->device_timestamp_ns,
-                                           block.data->device_timestamp_ns, m_depth_image_width,
-                                           m_depth_image_height, stride, (void*) (infrared_image.data),
-                                           nbytes);
+    if (m_export_config.process_infrared()) {
+      cv::Mat image;
+      uint8 bits_per_element = 16;
+      size_t stride = (feed->m_depth_image_width * bits_per_element) / 8;
+      size_t nbytes = stride * feed->m_depth_image_height;
+      bool ret = k4a_wrapper->setInfraredImage(depth_ts_ns,
+                                               depth_ts_ns, 
+                                               feed->m_depth_image_width, feed->m_depth_image_height,
+                                               stride, (void*) (data->ir_image.data),
+                                               nbytes);
       if (!ret)
         spdlog::warn("Failed to set depth image on wrapper!");
-      */
 
     }
 
-    spdlog::info("K4AWrapper pointer count, beginning of advance: {0}", k4a_wrapper.use_count());
+    // spdlog::trace("K4AWrapper pointer count, beginning of advance: {0}", k4a_wrapper.use_count());
     if (m_export_config.export_color) {
-      auto lambda = [=] (std::shared_ptr<PCPDFileChannel> feed,
-            std::shared_ptr<KPU::Kinect4AzureCaptureWrapper> k4a_wrapper, const int frame_id) {
-        spdlog::info("K4AWrapper pointer count, lambda: {0}", k4a_wrapper.use_count());
+      //auto lambda = [=] (std::shared_ptr<PCPDFileChannel> feed,
+      //      std::shared_ptr<KPU::Kinect4AzureCaptureWrapper> k4a_wrapper, const int frame_id) {
+        //spdlog::trace("K4AWrapper pointer count, lambda: {0}", k4a_wrapper.use_count());
         process_color(k4a_wrapper->capture_handle.get_color_image(),
                       feed->m_device_wrapper,
                       feed->get_output_dir(),
                       frame_id);
-        spdlog::info("K4AWrapper pointer count, lambda after: {0}", k4a_wrapper.use_count());
-      };
-      run_threaded(&lambda, feed, k4a_wrapper, frame_id);
+        // spdlog::info("K4AWrapper pointer count, lambda after: {0}", k4a_wrapper.use_count());
+      //};
+      //run_threaded(&lambda, feed, k4a_wrapper, frame_id);
     }
 
     if (m_export_config.export_depth) {
-      auto lambda = [=] (std::shared_ptr<PCPDFileChannel> feed, 
-            std::shared_ptr<KPU::Kinect4AzureCaptureWrapper> k4a_wrapper, const int frame_id) {
-        assert(k4a_wrapper->capture_handle != nullptr);
+      //auto lambda = [=] (std::shared_ptr<PCPDFileChannel> feed, 
+      //      std::shared_ptr<KPU::Kinect4AzureCaptureWrapper> k4a_wrapper, const int frame_id) {
+      //  assert(k4a_wrapper->capture_handle != nullptr);
         process_depth(k4a_wrapper->capture_handle.get_depth_image(),
                       feed->m_device_wrapper,
                       feed->get_output_dir(),
                       frame_id);
-      };
-      run_threaded(&lambda, feed, k4a_wrapper, frame_id);
+      //};
+      //run_threaded(&lambda, feed, k4a_wrapper, frame_id);
     }
 
     if (m_export_config.export_infrared) {
@@ -309,7 +319,7 @@ namespace extract_mkv {
       process_pose(feed->m_device_wrapper, feed->get_output_dir(), frame_id);
     }
 
-    spdlog::info("K4AWrapper pointer count, end for advance: {0}", k4a_wrapper.use_count());
+    // spdlog::trace("K4AWrapper pointer count, end of advance: {0}", k4a_wrapper.use_count());
     return true;
   };
 
@@ -336,7 +346,7 @@ namespace extract_mkv {
       }
       std::chrono::microseconds timestamp;
       if (m_export_config.export_color_video && element->second.size() == m_input_feeds.size()) {
-        std::map<int, cv::Mat> color_images;
+        std::map<int, cv::cuda::GpuMat> color_images;
         for (auto wrapper : element->second) {
           if (!wrapper->color_image.empty()) {
             auto feed_name = wrapper->feed_name;
@@ -416,11 +426,11 @@ namespace extract_mkv {
                                                     m_feed_name, DECODER_TYPE::COLOR);
     m_ir_decoder = std::make_shared<H264Decoder>(cu_context, m_depth_image_width, m_depth_image_height,
                                                  m_feed_name, DECODER_TYPE::IR);
-    if (m_export_config.export_color || m_export_config.export_color_video)
+    if (m_export_config.process_color())
       m_loader->addTrack(COLOR_TRACK_KEY);
-    if (m_export_config.export_depth)
+    if (m_export_config.process_depth())
       m_loader->addTrack(DEPTH_TRACK_KEY);
-    if (m_export_config.export_infrared)
+    if (m_export_config.process_infrared())
       m_loader->addTrack(IR_TRACK_KEY);
     // read info from first filepath
     load_mkv_info(fps[0]);
@@ -466,9 +476,12 @@ namespace extract_mkv {
   }
 
   void PCPDFileChannel::initialize() {
+    spdlog::info("Initializing device calibration");
+    m_device_wrapper = std::make_shared<K4ADeviceWrapper>();
     m_device_wrapper->calibration = m_calibration;
     RectifyMaps rectify_maps = process_calibration(m_calibration, m_output_dir);
     m_device_wrapper->rectify_maps = rectify_maps;
+    spdlog::info("Done initializing device calibration");
   }
 
   int64_t TimesynchronizerPCPD::get_frame_from_timestamp(std::chrono::nanoseconds timestamp) {
@@ -477,33 +490,27 @@ namespace extract_mkv {
     return std::round(static_cast<double>((timestamp - m_export_config.start_ts).count()) / ns_per_frame);
   }
 
-  bool PCPDFileChannel::pcpd_extract_color(cv::Mat &color_image, std::chrono::microseconds &timestamp, bool write) { 
+  bool PCPDFileChannel::pcpd_extract_color(cv::cuda::GpuMat &color_image, std::chrono::microseconds &timestamp, bool write) { 
     MkvDataBlock2 block;
-    auto path_template = "color_frame_{0}.jpg";
     if(!m_loader->getNextDataBlock(block, COLOR_TRACK_KEY)) {
       spdlog::error("Unable to get next color block {0}..", m_frame_counter);
       return false;
     }
 
     spdlog::trace("Extracting color image from mkv");
+    color_image.create(cv::Size(m_color_image_width, m_color_image_height), CV_8UC4);
     bool ret = m_color_decoder->decode(block.data->data_block, color_image);
     timestamp = std::chrono::microseconds{block.data->device_timestamp_usec};
-    // cv::cvtColor(color_image, color_image, cv::COLOR_BGR2RGB);
-    /*
-    size_t stride = (color_image.cols * color_image.elemSize());
-    size_t nbytes = stride * color_image.rows;
-    ret &= wrapper->setColorImage(block.data->device_timestamp_ns,
-                                  block.data->device_timestamp_ns, m_color_image_width,
-                                  m_color_image_height, stride, (void*) (color_image.data),
-                                  nbytes, m_color_pixel_format);
-    */
     if (!ret) {
       spdlog::error("Export failed for frame {0}", m_frame_counter);
     } else {
       if (write) {
+        auto path_template = "color_frame_{0}.jpg";
         spdlog::info("Export color frame: {0} with size {1} and timestamp: {2}", m_frame_counter, color_image.size(), block.data->device_timestamp_ns);
         fs::path fp = (m_output_dir / fmt::format(path_template, m_frame_counter)).string();
-        cv::imwrite(fp, color_image);
+        cv::Mat out;
+        color_image.download(out);
+        cv::imwrite(fp, out);
       }
     }
     return true;
@@ -512,7 +519,6 @@ namespace extract_mkv {
   bool PCPDFileChannel::pcpd_extract_depth(cv::Mat& depth_image, std::chrono::microseconds &timestamp, bool write /* =false */) {
     uint8 bits_per_element = 16;
     MkvDataBlock2 block;
-    auto path_template = "depth_frame_{0}.tiff";
     if(!m_loader->getNextDataBlock(block, DEPTH_TRACK_KEY)) {
       spdlog::error("Unable to get next color block {0}..", m_frame_counter);
       return false;
@@ -533,113 +539,44 @@ namespace extract_mkv {
 
     if (ret != zdepth::DepthResult::Success) {
       spdlog::error("Export failed for frame {0}", m_frame_counter);
-    } else {
-      if (write) {
-        spdlog::info("Export depth frame: {0} with size {1} and timestamp: {2}", 
-            m_frame_counter, depth_image.size(), block.data->device_timestamp_ns);
-        fs::path fp = (m_output_dir / fmt::format(path_template, m_frame_counter)).string();
-        cv::imwrite(fp, depth_image);
-      }
+      return false;
+    }
+    if (write) {
+      auto path_template = "depth_frame_{0}.tiff";
+      spdlog::info("Export depth frame: {0} with size {1} and timestamp: {2}", 
+          m_frame_counter, depth_image.size(), block.data->device_timestamp_ns);
+      fs::path fp = (m_output_dir / fmt::format(path_template, m_frame_counter)).string();
+      cv::Mat image;
+      depth_image.convertTo(image, CV_8UC1);
+      cv::imwrite(fp, image);
     }
     return true;
   }
 
-  bool PCPDFileChannel::pcpd_extract_infrared(cv::Mat& infrared_image, bool write) {
+  bool PCPDFileChannel::pcpd_extract_infrared(cv::Mat& infrared_image, std::chrono::microseconds& timestamp, bool write) {
     uint8 bits_per_element = 16;
     MkvDataBlock2 block;
-    auto path_template = "color_frame_{0}.jpg";
     if(!m_loader->getNextDataBlock(block, IR_TRACK_KEY)) {
       spdlog::error("Unable to get next infrared block {0}..", m_frame_counter);
       return false;
     }
 
+    timestamp = std::chrono::microseconds{block.data->device_timestamp_usec};
     spdlog::debug("Extracting infrared image from mkv");
-    infrared_image = cv::Mat(cv::Size(m_depth_image_width, m_depth_image_height), CV_16UC1);
     bool ret = m_ir_decoder->decode(block.data->data_block, infrared_image);
-    size_t stride = (infrared_image.cols * bits_per_element) / 8;
-    size_t nbytes = stride * infrared_image.rows;
-    // TODO: pcpd uses depth image dims for the IR image. Is this correct?
-    /*
-    ret &= wrapper->setInfraredImage(block.data->device_timestamp_ns,
-                                     block.data->device_timestamp_ns, m_depth_image_width,
-                                     m_depth_image_height, stride, (void*) (infrared_image.data),
-                                     nbytes);
-    */
     if (!ret) {
       spdlog::error("Export failed for frame {0}", m_frame_counter);
     } else {
       if (write) {
-        spdlog::info("Export color frame: {0} with size {1} and timestamp: {2}", m_frame_counter, infrared_image.size(), block.data->device_timestamp_ns);
+        auto path_template = "infrared_frame_{0}.tiff";
+        spdlog::trace("Export infrared frame: {0} with size {1} and timestamp: {2}", m_frame_counter, infrared_image.size(), block.data->device_timestamp_ns);
         fs::path fp = (m_output_dir / fmt::format(path_template, m_frame_counter)).string();
-        cv::imwrite(fp, infrared_image);
+        cv::Mat image;
+        infrared_image.convertTo(image, CV_8UC1);
+        cv::imwrite(fp, image);
       }
     }
     return true;
-  }
-
-  H264Decoder::H264Decoder(CUcontext &cu_context, int width, int height, std::string feed_name, DECODER_TYPE decoder_type)
-            : m_width {width}
-            , m_height {height}
-            , m_decoder_type {decoder_type}
-            , m_feed_name {feed_name} {
-        cudaVideoCodec codec = cudaVideoCodec::cudaVideoCodec_H264;
- 
-        m_decoder = std::make_shared<NvDecoder>(cu_context, false, codec, true);
-
-        if (!m_decoder) 
-        {
-          spdlog::error("Failed to create Nvenc Decoder - exiting.");
-          return;
-        }
-        else
-        {
-          spdlog::info("Successfully created Decoder");
-        }
-
-        cudaStreamCreate(&m_cuda_stream);
-  }
-
-  H264Decoder::~H264Decoder() {
-    cudaStreamDestroy(m_cuda_stream);
-  }
-
-  bool H264Decoder::decode(std::vector<uint8_t>& data_block, cv::Mat& image) {
-      m_fc++;
-      spdlog::trace("Calling NvDecoder::Decode {0}", data_block.size());
-      int nFrameReturned = m_decoder->Decode(data_block.data(), data_block.size(), CUVID_PKT_ENDOFPICTURE, m_fc, m_cuda_stream);
-      cudaStreamSynchronize(m_cuda_stream);
-
-      if(nFrameReturned >= 1)
-      {
-          if (m_decoder->GetOutputFormat() != cudaVideoSurfaceFormat_NV12) 
-          {
-            spdlog::error("Unsupported videoSurfaceOutput format, only NV12 is supported.");
-              return false;
-          }
-
-          int64_t timestamp;
-
-          if (m_decoder_type == COLOR) {
-            spdlog::trace("Decoding image frame of type color");
-            const auto decodedFramePtr = m_decoder->GetFrame(&timestamp);
-            cv::Mat picYV12 = cv::Mat(m_height * 3/2, m_width, CV_8UC1, decodedFramePtr);
-
-            // TOOD: can we use this pixelformat?
-            cv::cvtColor(picYV12, image, cv::COLOR_YUV2BGRA_NV12);
-          } else if (m_decoder_type == IR) {
-            spdlog::trace("Decoding image frame of type ir");
-            const auto decodedFramePtr = m_decoder->GetFrame(&timestamp);
-            Nv12ToUint8(decodedFramePtr,m_decoder->GetDeviceFramePitch(),(uint8_t*)image.data,
-                sizeof(uint16_t)*m_width,
-                m_width,m_height,nullptr);
-          }
-          return true;
-      }
-      else
-      {
-        spdlog::error("No Frames returned for feed {0}", m_feed_name);
-        return false;
-      }
   }
 
   std::string PCPDFileChannel::get_output_dir() {

@@ -7,6 +7,7 @@
 #include "extract_mkv/extract_mkv_k4a.h"
 #include "extract_mkv/kinect4azure_capture_wrapper.h"
 #include "extract_mkv/timesync.h"
+#include "extract_mkv/h264.h"
 
 #include "libyuv.h"
 #include "turbojpeg.h"
@@ -36,46 +37,27 @@ using namespace rttr;
 using namespace KPU;
 
 namespace extract_mkv {
-  enum DECODER_TYPE {
-    COLOR,
-    IR,
-  };
-  class H264Decoder {
-    public:
-        explicit H264Decoder(CUcontext&, int, int, std::string, DECODER_TYPE);
-        ~H264Decoder();
-
-        bool decode(std::vector<uint8_t>&, cv::Mat&);
-
-    private:
-      std::shared_ptr<NvDecoder> m_decoder;
-      int m_width {0};
-      int m_height {0};
-      DECODER_TYPE m_decoder_type;
-      std::string m_feed_name{};
-      size_t m_fc{0};
-      cudaStream_t m_cuda_stream;
-  };
   class PCPDFileChannel {
     public:
       explicit PCPDFileChannel(fs::path, fs::path, std::string, ExportConfig&, CUcontext&);
-      bool pcpd_extract_color(cv::Mat&, std::chrono::microseconds&, bool write=false);
+      bool pcpd_extract_color(cv::cuda::GpuMat&, std::chrono::microseconds&, bool write=false);
       bool pcpd_extract_depth(cv::Mat&, std::chrono::microseconds&, bool write=false);
-      bool pcpd_extract_infrared(cv::Mat&, bool write=false);
+      bool pcpd_extract_infrared(cv::Mat&, std::chrono::microseconds&, bool write=false);
       void load_mkv_info(std::string);
       void initialize();
-      std::shared_ptr<K4ADeviceWrapper> m_device_wrapper{};
+      std::shared_ptr<K4ADeviceWrapper> m_device_wrapper;
       std::string get_output_dir();
       std::string m_feed_name;
       std::chrono::nanoseconds m_last_depth_ts{0};
       int m_missing_frame_count{0};
-      uint8_t m_recording_fps{30};
+      float m_recording_fps{29.97};
       std::shared_ptr<ProcessedData> m_processed_data;
       uint16_t m_color_image_width{2048};
       uint16_t m_color_image_height{1536};
       uint16_t m_depth_image_width{640};
       uint16_t m_depth_image_height{576};
       pcpd::datatypes::PixelFormatType m_color_pixel_format{pcpd::datatypes::PixelFormatType::BGRA};
+      uint64_t m_frame_counter{1};
 
     protected:
       MkvTrackLoaderConfig m_trackloader_config{};
@@ -87,7 +69,6 @@ namespace extract_mkv {
 
       fs::path m_input_dir;
       fs::path m_output_dir;
-      uint64_t m_frame_counter{1};
       k4a::calibration m_calibration;
   };
 
