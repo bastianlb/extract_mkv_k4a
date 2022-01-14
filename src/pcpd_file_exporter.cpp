@@ -11,6 +11,7 @@
 #include "extract_mkv/kinect4azure_capture_wrapper.h"
 #include "extract_mkv/timesync.h"
 #include "extract_mkv/extract_mkv_k4a.h"
+#include "extract_mkv/export.h"
 #include "pcpd/processing/cuda/detail/error_handling.cuh"
 #include "pcpd/processing/cuda/detail/hardware.cuh"
 #include "pcpd/processing/cuda/detail/developer_tools.cuh"
@@ -25,6 +26,7 @@ using namespace rttr;
 
 const int MIN_FILESIZE_BYTES = 100*1000*1000; // 100 MB
 const float SYNC_WINDOW = 0.8;
+const int MAX_RUNNING_JOBS = std::thread::hardware_concurrency() * 2;
 
 std::string COLOR_TRACK_KEY = "COLOR";
 std::string DEPTH_TRACK_KEY = "DEPTH";
@@ -79,11 +81,11 @@ namespace extract_mkv {
   void TimesynchronizerPCPD::run() {
       // naive counter for successive failures
       m_is_running = true;
-      m_monitor_thread = std::thread([=] () {
-        monitor();
-      });
-      m_performance_thread = std::thread([=] () {
+      m_thread_pool.push_task([=] () {
         performance_monitor();
+      });
+      m_thread_pool.push_task([=] () {
+          monitor_frame_map();
       });
 
       while(m_frames_exported < m_export_config.max_frames_exported && m_is_running) {
@@ -132,6 +134,7 @@ namespace extract_mkv {
                        mean_timestamp.count(), m_export_config.start_ts.count(), m_export_config.end_ts.count());
           continue;
         }
+
         int frame_id = get_frame_from_timestamp(mean_timestamp);
 
         if (frame_id < 0) {
@@ -144,15 +147,42 @@ namespace extract_mkv {
           continue;
         }
 
-        m_frame_map_lock.lock();
-        for (auto feed : m_input_feeds) {
-           process_feed(feed, feed->m_processed_data, frame_id);
-           m_frame_map[frame_id].push_back(feed->m_processed_data);
+        if (m_thread_pool.get_tasks_total() > MAX_RUNNING_JOBS) {
+          spdlog::debug("Total tasks qeued: {0}. sleeping", m_thread_pool.get_tasks_total());
+          std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         }
+        std::vector<std::shared_future<bool>> futures;
+
+        m_frame_map_lock.lock();
+        m_frame_map[frame_id] = std::make_unique<DataGroup>();
         m_frame_map_lock.unlock();
-        monitor_frame_map();
+
+        for (auto feed : m_input_feeds) {
+          // reset frame count, we received a frame.
+          feed->m_missing_frame_count = 0;
+
+          if (frame_id % m_export_config.skip_frames != 0) {
+            continue;
+          }
+
+          spdlog::debug("Submitting process feed task for {0}, {1}", feed->m_feed_name, frame_id);
+
+          std::shared_ptr<ProcessedData> processed_data = std::move(feed->m_processed_data);
+          m_frame_map_lock.lock();
+          m_frame_map[frame_id]->feed_data_map[feed->get_feed_id()] = processed_data;
+          m_frame_map_lock.unlock();
+          std::shared_future<bool> task_future = m_thread_pool.submit(
+               [=] {
+                 // TODO: need a way of synchronizing and waiting until we can delete
+                 // from frame map
+                 process_feed(feed, processed_data, frame_id);
+               }
+           );
+        }
+        spdlog::debug("Submitting monitor task {0}", frame_id);
       }
       // process remaining frames
+      m_is_running = false;
       monitor_frame_map(true);
       spdlog::info("Finishing.. total {0} frames exported", m_frames_exported / m_export_config.skip_frames);
       shutdown();
@@ -161,12 +191,12 @@ namespace extract_mkv {
   void TimesynchronizerPCPD::advance_feed(std::shared_ptr<PCPDFileChannel> feed) {
     using namespace std::chrono;
     // naive counter for debug export
+    feed->m_processed_data = std::make_unique<ProcessedData>();
     feed->m_frame_counter = m_frames_exported;
     bool ts_exported = false;
     // create wrappers to get transformation / calibration handles
     microseconds image_timestamp;
     // note: lifecycle is not managed by this function. They are stored and cleaned up later.
-    feed->m_processed_data = std::make_shared<ProcessedData>();
     feed->m_processed_data->feed_name = feed->m_feed_name;
     if (m_export_config.process_color()) {
       if (feed->pcpd_extract_color(feed->m_processed_data->color_image, image_timestamp)) {
@@ -208,26 +238,18 @@ namespace extract_mkv {
     auto k4a_wrapper = std::make_shared<KPU::Kinect4AzureCaptureWrapper>(feed->m_feed_name);
     assert(k4a_wrapper->capture_handle != nullptr);
 
-    // reset frame count, we received a frame.
-    feed->m_missing_frame_count = 0;
-
-    if (frame_id % m_export_config.skip_frames != 0) {
-      // TODO: should return ENUM here, so we can take
-      // appropriate actions downstream..
-      return true;
-    }
-
+    cv::Mat color_image;
     if (m_export_config.process_color()) {
+      assert(!data->color_image.empty());
+      data->color_image.download(color_image);
       // color needs to be set on wrapper
       uint64_t depth_ts_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(data->timestamp_us).count();
       size_t stride = (data->color_image.cols * data->color_image.elemSize());
       size_t nbytes = stride * data->color_image.rows;
-      cv::Mat image;
-      data->color_image.download(image);
       bool ret = k4a_wrapper->setColorImage(depth_ts_ns,
                                             depth_ts_ns, feed->m_color_image_width,
                                             feed->m_color_image_height, stride,
-                                            (void*) (image.data),
+                                            (void*) (color_image.data),
                                             nbytes, feed->m_color_pixel_format);
 
       if (!ret)
@@ -268,28 +290,17 @@ namespace extract_mkv {
 
     // spdlog::trace("K4AWrapper pointer count, beginning of advance: {0}", k4a_wrapper.use_count());
     if (m_export_config.export_color) {
-      //auto lambda = [=] (std::shared_ptr<PCPDFileChannel> feed,
-      //      std::shared_ptr<KPU::Kinect4AzureCaptureWrapper> k4a_wrapper, const int frame_id) {
-        //spdlog::trace("K4AWrapper pointer count, lambda: {0}", k4a_wrapper.use_count());
-        process_color(k4a_wrapper->capture_handle.get_color_image(),
-                      feed->m_device_wrapper,
-                      feed->get_output_dir(),
-                      frame_id);
-        // spdlog::info("K4AWrapper pointer count, lambda after: {0}", k4a_wrapper.use_count());
-      //};
-      //run_threaded(&lambda, feed, k4a_wrapper, frame_id);
+        process_color_raw(color_image,
+                          feed->m_device_wrapper,
+                          feed->get_output_dir(),
+                          frame_id);
     }
 
     if (m_export_config.export_depth) {
-      //auto lambda = [=] (std::shared_ptr<PCPDFileChannel> feed, 
-      //      std::shared_ptr<KPU::Kinect4AzureCaptureWrapper> k4a_wrapper, const int frame_id) {
-      //  assert(k4a_wrapper->capture_handle != nullptr);
         process_depth(k4a_wrapper->capture_handle.get_depth_image(),
                       feed->m_device_wrapper,
                       feed->get_output_dir(),
                       frame_id);
-      //};
-      //run_threaded(&lambda, feed, k4a_wrapper, frame_id);
     }
 
     if (m_export_config.export_infrared) {
@@ -324,63 +335,54 @@ namespace extract_mkv {
   };
 
   void TimesynchronizerPCPD::monitor_frame_map(bool flush /* = false */) {
-    spdlog::debug("Printing frame map...");
     // map should be ordered, so we can process in this manner
     // TODO: make this buffer size configurable
-    int MAX_FRAME_BUFFER_SIZE = 30;
-    int map_size = m_frame_map.size();
-    if (map_size < MAX_FRAME_BUFFER_SIZE)
-      // allow the feeds some time to catch up..
-      return;
-    auto element = m_frame_map.cbegin();
-    // always leave a buffer window of 30
-    // need to independently monitor frames so they are all more or less in sync;
-    int i = 0;
-    while (element != m_frame_map.cend() && (map_size - i > MAX_FRAME_BUFFER_SIZE || flush)) {
-      // debug printing
-      if (element->second.size() > 0) {
-        spdlog::debug("Frame map for frame {0}", element->first);
-        for (auto wrapper : element->second) {
-          spdlog::debug(wrapper->feed_name);
+    spdlog::debug("Starting monitor.. flush={0}", flush);
+    while (m_is_running) {
+      int MAX_FRAME_BUFFER_SIZE = 10;
+      int map_size = m_frame_map.size();
+      if (map_size < MAX_FRAME_BUFFER_SIZE)
+        // allow the feeds some time to catch up..
+        continue;
+      auto element = m_frame_map.cbegin();
+      // always leave a buffer window of 30
+      // need to independently monitor frames so they are all more or less in sync;
+      int i = 0;
+      while (element != m_frame_map.cend() && (map_size - i > MAX_FRAME_BUFFER_SIZE || flush)) {
+        // debug printing
+        if (element->second->feed_data_map.size() > 0) {
+          spdlog::trace("Frame map for frame {0}", element->first);
+          for (const auto& it : element->second->feed_data_map) {
+            spdlog::trace(it.second->feed_name);
+          }
         }
-      }
-      std::chrono::microseconds timestamp;
-      if (m_export_config.export_color_video && element->second.size() == m_input_feeds.size()) {
-        std::map<int, cv::cuda::GpuMat> color_images;
-        for (auto wrapper : element->second) {
-          if (!wrapper->color_image.empty()) {
-            auto feed_name = wrapper->feed_name;
-            // note, this relies on feed name being at least 2 chars,
-            // and last two chars being feed id. Not robust.
-            int feed_id = std::stoi(feed_name.c_str() + 4 - 2);
-            color_images[feed_id] = wrapper->color_image;
-            timestamp = wrapper->timestamp_us;
-          };
+        std::chrono::microseconds timestamp;
+        if (m_export_config.export_color_video && element->second->feed_data_map.size() == m_input_feeds.size()) {
+          std::map<int, cv::cuda::GpuMat> color_images;
+          for (auto it : element->second->feed_data_map) {
+            auto wrapper = it.second;
+            if (!wrapper->color_image.empty()) {
+              int feed_id = it.first;
+              color_images[feed_id] = wrapper->color_image;
+              timestamp = wrapper->timestamp_us;
+            };
+          }
+          //all images present
+          // TODO: make thread safe
+          m_video_writer.write_frames(color_images, timestamp);
+          // standard associative-container erase idiom.
         }
-        //all images present
-        m_video_writer.write_frames(color_images, timestamp);
-        // standard associative-container erase idiom.
-        // TODO: make thread safe
-      }
-      spdlog::debug("Removing iterated map element");
-      // TODO: this removes all
-      m_frame_map.erase(element++);
-      i++;
-    }
-  };
+        spdlog::debug("Removing iterated map element");
 
-  template <typename F>
-  void TimesynchronizerPCPD::run_threaded(const F* func,
-        std::shared_ptr<PCPDFileChannel> feed, std::shared_ptr<KPU::Kinect4AzureCaptureWrapper> k4a_wrapper, const int frame_id) {
-      m_sem.wait();
-      std::scoped_lock<std::mutex> lock1(m_lock);
-      spdlog::debug("Launching thread for frame {0}", frame_id);
-      m_worker_threads.push_back(std::thread([&] {
-            (*func)(feed, k4a_wrapper, frame_id);
-            m_finished_threads.push_back(std::this_thread::get_id());
-            m_sem.notify();
-            m_wait_cv.notify_one();
-      }));
+        m_frame_map_lock.lock();
+        // TODO: need to make sure individual items are done processing
+        m_frame_map.erase(element++);
+        m_frame_map_lock.unlock();
+        i++;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    spdlog::debug("Exiting monitor, running: {0}", m_is_running);
   };
 
   PCPDFileChannel::PCPDFileChannel(fs::path input_dir, fs::path output_directory,

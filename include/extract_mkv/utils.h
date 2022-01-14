@@ -65,7 +65,6 @@ namespace extract_mkv {
         }
     };
 
-
     struct RectifyMaps {
         cv::Mat depth_map_x;
         cv::Mat depth_map_y;
@@ -82,6 +81,15 @@ namespace extract_mkv {
             cv::Mat ir_image;
             int frame_id;
             std::chrono::microseconds timestamp_us;
+    };
+
+    class DataGroup {
+        public:
+            explicit DataGroup() = default;
+            int frame_id;
+            std::map<int, std::shared_ptr<ProcessedData>> feed_data_map;
+            std::mutex lock;
+
     };
 
     class PCPDVideoWriter {

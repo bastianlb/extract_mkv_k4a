@@ -17,11 +17,13 @@ else()
 endif()
 
 SET(APP_HEADERS
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/thread_pool.hpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/extract_mkv/transformation_helpers.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/extract_mkv/extract_mkv_k4a.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/extract_mkv/timesync.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/extract_mkv/filesystem.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/extract_mkv/h264.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/extract_mkv/export.h"
     )
 
 SET(PCPD_HEADERS)

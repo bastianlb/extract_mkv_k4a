@@ -5,13 +5,14 @@
 #include <condition_variable>
 #include <signal.h>
 
+#include "thread_pool.hpp"
 #include "extract_mkv/utils.h"
 #include "extract_mkv/extract_mkv_k4a.h"
 
 namespace extract_mkv {
 
 
-  const int MAX_PARALLEL_JOBS = 12;
+  const int MAX_PARALLEL_JOBS = 16;
 
   class Semaphore {
   public:
@@ -62,8 +63,10 @@ namespace extract_mkv {
 
       std::thread m_monitor_thread;
       std::thread m_performance_thread;
-      bool m_is_running{false};
+      std::atomic<bool> m_is_running{false};
       int m_frames_exported{0};
+      // TODO: remove old manual thread pool
+      thread_pool m_thread_pool{MAX_PARALLEL_JOBS};
   };
 
   class TimesynchronizerK4A : public TimesynchronizerBase {

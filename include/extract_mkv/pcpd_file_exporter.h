@@ -45,19 +45,24 @@ namespace extract_mkv {
       bool pcpd_extract_infrared(cv::Mat&, std::chrono::microseconds&, bool write=false);
       void load_mkv_info(std::string);
       void initialize();
+      int get_feed_id() {
+        // note, this relies on feed name being at least 2 chars,
+        // and last two chars being feed id. Not robust.
+        return std::stoi(m_feed_name.c_str() + 4 - 2);
+      }
       std::shared_ptr<K4ADeviceWrapper> m_device_wrapper;
       std::string get_output_dir();
       std::string m_feed_name;
       std::chrono::nanoseconds m_last_depth_ts{0};
       int m_missing_frame_count{0};
       float m_recording_fps{29.97};
-      std::shared_ptr<ProcessedData> m_processed_data;
       uint16_t m_color_image_width{2048};
       uint16_t m_color_image_height{1536};
       uint16_t m_depth_image_width{640};
       uint16_t m_depth_image_height{576};
       pcpd::datatypes::PixelFormatType m_color_pixel_format{pcpd::datatypes::PixelFormatType::BGRA};
-      uint64_t m_frame_counter{1};
+      std::unique_ptr<ProcessedData> m_processed_data;
+      std::atomic<uint64_t> m_frame_counter{1};
 
     protected:
       MkvTrackLoaderConfig m_trackloader_config{};
@@ -79,14 +84,12 @@ namespace extract_mkv {
       void initialize_feeds(std::vector<fs::path>, fs::path);
       void advance_feed(std::shared_ptr<PCPDFileChannel>);
       bool process_feed(std::shared_ptr<PCPDFileChannel>, std::shared_ptr<ProcessedData>, const int);
-      template <typename F>
-      void run_threaded(const F* func, std::shared_ptr<PCPDFileChannel>, std::shared_ptr<KPU::Kinect4AzureCaptureWrapper>, int);
       int64_t get_frame_from_timestamp(std::chrono::nanoseconds);
       void monitor_frame_map(bool flush=false);
       int m_max_frames_exported = std::numeric_limits<int>::max();
 
     protected:
-      std::map<int, std::vector<std::shared_ptr<ProcessedData>>> m_frame_map;
+      std::map<int, std::unique_ptr<DataGroup>> m_frame_map;
       std::mutex m_frame_map_lock;
       std::vector<std::shared_ptr<PCPDFileChannel>> m_input_feeds;
       uint8_t m_recording_fps{30};

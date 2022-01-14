@@ -92,7 +92,7 @@ namespace extract_mkv {
             uint32_t strideSrc = m_decoder->GetDeviceFramePitch();
             uint32_t strideDst = 2 * m_width;
 
-            Nv12ToUint16(decodedFramePtr, strideSrc, dev_decodedFramePtrDst, strideDst, m_width, m_height);
+            Nv12ToUint16(decodedFramePtr, strideSrc, dev_decodedFramePtrDst, strideDst, m_width, m_height, m_cuda_stream);
 
             //std::shared_ptr<uint8_t[]> img_data{ new uint8_t[SIZE] };
             if (cudaMemcpy((uint8_t *) image.data, dev_decodedFramePtrDst, SIZE, cudaMemcpyDeviceToDevice) != cudaSuccess)
@@ -112,7 +112,10 @@ namespace extract_mkv {
             cv::imwrite(fp, mat2);
             */
           }
-          cudaStreamSynchronize(m_cuda_stream);
+          if (cudaStreamSynchronize(m_cuda_stream) != cudaSuccess) {
+            spdlog::warn("Failed to decode h264 image");
+          };
+          assert(!image.empty());
           return true;
       }
       else

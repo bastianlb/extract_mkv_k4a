@@ -266,69 +266,70 @@ namespace extract_mkv {
     }
 
     int process_color(k4a::image input_color_image, std::shared_ptr<K4ADeviceWrapper> device_wrapper, fs::path output_directory, int frame_counter) {
-        if (input_color_image.is_valid()) {
-            spdlog::debug("K4A processing color image {0}", frame_counter);
-            cv::Mat undistorted_image;
-
-            int w = input_color_image.get_width_pixels();
-            int h = input_color_image.get_height_pixels();
-
-            cv::Mat image_buffer;
-            uint timestamp = input_color_image.get_system_timestamp().count();
-
-            std::ostringstream ss;
-
-            std::vector<int> compression_params;
-            compression_params.push_back(cv::IMWRITE_JPEG_QUALITY);
-            compression_params.push_back(95);
-
-            if (input_color_image.get_format() == K4A_IMAGE_FORMAT_COLOR_BGRA32) {
-                cv::Mat image_buffer = cv::Mat(cv::Size(w, h), CV_8UC4,
-                                               const_cast<void*>(static_cast<const void *>(input_color_image.get_buffer())),
-                                               static_cast<size_t>(input_color_image.get_stride_bytes()));
-                cv::remap(image_buffer, undistorted_image, device_wrapper->rectify_maps.color_map_x,
-                          device_wrapper->rectify_maps.color_map_y, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
-
-                ss << std::setw(10) << std::setfill('0') << frame_counter << "_color.jpg";
-                fs::path image_path = output_directory / ss.str();
-                cv::imwrite(image_path, undistorted_image, compression_params);
-                std::ostringstream s;
-                s << std::setw(10) << std::setfill('0') << frame_counter << "_distorted_color.jpg";
-                image_path = output_directory / s.str();
-                // cv::imwrite(image_path, image_buffer, compression_params);
-                cv::Mat diff;
-                std::ostringstream sss;
-                cv::absdiff(image_buffer, undistorted_image, diff);
-                sss << std::setw(10) << std::setfill('0') << frame_counter << "_diff_color.jpg";
-                image_path = output_directory / sss.str();
-                // cv::imwrite(image_path, diff, compression_params);
-
-            } else if (input_color_image.get_format() == K4A_IMAGE_FORMAT_COLOR_MJPG) {
-                int n_size = input_color_image.get_size();
-                cv::Mat raw_data(1, n_size, CV_8UC1, (void*)(input_color_image.get_buffer()), input_color_image.get_size());
-                image_buffer = cv::imdecode(raw_data, cv::IMREAD_COLOR);
-                if ( image_buffer.data == NULL ) {
-                    // Error reading raw image data
-                    throw MissingDataException();
-                }
-                cv::remap(image_buffer, undistorted_image, device_wrapper->rectify_maps.color_map_x,
-                          device_wrapper->rectify_maps.color_map_y, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
-                ss << std::setw(10) << std::setfill('0') << frame_counter << "_color.jpg";
-                fs::path image_path = output_directory / ss.str();
-                cv::imwrite(image_path, undistorted_image, compression_params);
-                std::ostringstream s;
-                s << std::setw(10) << std::setfill('0') << frame_counter << "_distored_color.jpg";
-                image_path = output_directory / s.str();
-                // cv::imwrite(image_path, image_buffer, compression_params);
-            } else {
-                spdlog::warn("Received color frame with unexpected format: {0}",
-                            input_color_image.get_format());
-                throw MissingDataException();
-            }
-            return timestamp;
-        } else {
+        if (!input_color_image.is_valid()) {
+            spdlog::warn("Color image invalid for {0}, frame {1}", output_directory, frame_counter);
             return -1;
         }
+        spdlog::debug("K4A processing color image {0}", frame_counter);
+        cv::Mat undistorted_image;
+
+        int w = input_color_image.get_width_pixels();
+        int h = input_color_image.get_height_pixels();
+
+        cv::Mat image_buffer;
+        uint timestamp = input_color_image.get_system_timestamp().count();
+
+        std::ostringstream ss;
+
+        std::vector<int> compression_params;
+        compression_params.push_back(cv::IMWRITE_JPEG_QUALITY);
+        compression_params.push_back(95);
+
+        if (input_color_image.get_format() == K4A_IMAGE_FORMAT_COLOR_BGRA32) {
+            cv::Mat image_buffer = cv::Mat(cv::Size(w, h), CV_8UC4,
+                                           const_cast<void*>(static_cast<const void *>(input_color_image.get_buffer())),
+                                           static_cast<size_t>(input_color_image.get_stride_bytes()));
+            cv::remap(image_buffer, undistorted_image, device_wrapper->rectify_maps.color_map_x,
+                      device_wrapper->rectify_maps.color_map_y, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
+
+            spdlog::debug("Writing color image..");
+            ss << std::setw(10) << std::setfill('0') << frame_counter << "_color.jpg";
+            fs::path image_path = output_directory / ss.str();
+            cv::imwrite(image_path, undistorted_image, compression_params);
+            std::ostringstream s;
+            s << std::setw(10) << std::setfill('0') << frame_counter << "_distorted_color.jpg";
+            image_path = output_directory / s.str();
+            // cv::imwrite(image_path, image_buffer, compression_params);
+            cv::Mat diff;
+            std::ostringstream sss;
+            cv::absdiff(image_buffer, undistorted_image, diff);
+            sss << std::setw(10) << std::setfill('0') << frame_counter << "_diff_color.jpg";
+            image_path = output_directory / sss.str();
+            // cv::imwrite(image_path, diff, compression_params);
+
+        } else if (input_color_image.get_format() == K4A_IMAGE_FORMAT_COLOR_MJPG) {
+            int n_size = input_color_image.get_size();
+            cv::Mat raw_data(1, n_size, CV_8UC1, (void*)(input_color_image.get_buffer()), input_color_image.get_size());
+            image_buffer = cv::imdecode(raw_data, cv::IMREAD_COLOR);
+            if ( image_buffer.data == NULL ) {
+                // Error reading raw image data
+                throw MissingDataException();
+            }
+            cv::remap(image_buffer, undistorted_image, device_wrapper->rectify_maps.color_map_x,
+                      device_wrapper->rectify_maps.color_map_y, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
+            ss << std::setw(10) << std::setfill('0') << frame_counter << "_color.jpg";
+            fs::path image_path = output_directory / ss.str();
+            cv::imwrite(image_path, undistorted_image, compression_params);
+            std::ostringstream s;
+            s << std::setw(10) << std::setfill('0') << frame_counter << "_distored_color.jpg";
+            image_path = output_directory / s.str();
+            // cv::imwrite(image_path, image_buffer, compression_params);
+        } else {
+            spdlog::warn("Received color frame with unexpected format: {0}",
+                        input_color_image.get_format());
+            throw MissingDataException();
+        }
+        return timestamp;
     }
 
     void process_rgbd(k4a::image input_color_image,

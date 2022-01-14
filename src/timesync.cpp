@@ -114,6 +114,7 @@ namespace extract_mkv {
   };
 
   void TimesynchronizerBase::monitor() {
+    // TOOD: thread pool will handle this
     while (m_is_running) {
       spdlog::trace("Cleaning up threads.."); 
       std::unique_lock<std::mutex> lock1(m_thread_free_lock);
@@ -143,6 +144,7 @@ namespace extract_mkv {
   }
 
   void TimesynchronizerBase::performance_monitor() {
+    spdlog::info("Starting performance monitor..");
     const int monitor_delay{60};
     int time_delayed;
     int last_frame_cap;
@@ -157,6 +159,7 @@ namespace extract_mkv {
         last_frame_cap = frames_exported;
       }
     }
+    spdlog::trace("Exiting performance monitor..");
   }
 
   void TimesynchronizerK4A::run() {
@@ -222,23 +225,8 @@ namespace extract_mkv {
   }
   void TimesynchronizerBase::shutdown() {
     m_is_running = false;
-    m_wait_cv.notify_all();
-    spdlog::trace("Waiting for monitor...");
-    m_monitor_thread.join();
-    spdlog::trace("Monitor done...");
-    // wait for worker threads to complete
-
-    std::scoped_lock<std::mutex> lock(m_lock);
-    for (auto &thread : m_worker_threads) {
-      if (thread.joinable()) {
-        auto id = std::hash<std::thread::id>{}(thread.get_id());
-        spdlog::trace("Waiting for thread.. {0}", id);
-        thread.join();
-        spdlog::trace("Thread Done.. {0}", id);
-      }
-    }
     // wait for performance thread..
     // TODO: could take 1 minute.. should we kill it?
-    m_performance_thread.join();
+    m_thread_pool.wait_for_tasks();
   }
 }
