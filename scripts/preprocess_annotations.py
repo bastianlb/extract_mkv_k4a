@@ -18,6 +18,7 @@ def custom_date_parser(date):
     # put into ISO format
     date = date.replace(" ", "T")
     date = date.replace(",", ".")
+    date = date + "+00:00"
     try:
         return isoparse("2021-" + date)
     except ValueError as e:
@@ -69,7 +70,7 @@ if __name__ == "__main__":
         pao = annotations[(annotations["Trial"] == trial) & (annotations["Phase"] == "PAO")]
         tip = annotations[(annotations["Trial"] == trial) & (annotations["Phase"] == "TIP")]
         if (len(pao) == 0 or len(tip) == 0):  # noqa
-            logging.info(f"Trial missing annotations: {trial}")
+            logging.info(f"Trial missing PREP annotations: {trial}")
             continue
         assert(pao["filekey"].values[0] == tip["filekey"].values[0])
         pao_i = pd.arrays.IntervalArray([pd.Interval(pd.Timestamp(pao["Start"].values[0]), pd.Timestamp(pao["End"].values[0]))])  # noqa

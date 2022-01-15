@@ -184,7 +184,7 @@ namespace extract_mkv {
             };
             ~PCPDVideoWriter() {
                 // TODO: object being prematurely closed?
-                //m_writer.release();
+                m_writer.release();
             };
 
         protected:

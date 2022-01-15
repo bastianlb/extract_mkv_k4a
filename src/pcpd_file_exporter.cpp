@@ -24,7 +24,7 @@ using namespace pcpd;
 using namespace pcpd::record;
 using namespace rttr;
 
-const int MIN_FILESIZE_BYTES = 100*1000*1000; // 100 MB
+const int MIN_FILESIZE_BYTES = 1300*1000*1000; // 100 MB
 const float SYNC_WINDOW = 0.8;
 const int MAX_RUNNING_JOBS = std::thread::hardware_concurrency() * 2;
 
@@ -240,7 +240,10 @@ namespace extract_mkv {
 
     cv::Mat color_image;
     if (m_export_config.process_color()) {
-      assert(!data->color_image.empty());
+      if (data->color_image.empty()) {
+        spdlog::warn("Color image incomplete! {0} for feed {1}", frame_id, data->feed_name);
+        return false;
+      }
       data->color_image.download(color_image);
       // color needs to be set on wrapper
       uint64_t depth_ts_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(data->timestamp_us).count();

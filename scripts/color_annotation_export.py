@@ -52,8 +52,8 @@ if __name__ == "__main__":
             logging.warning(f"Skipping recording {export_path}, dir path not found.")
             continue
 
-        start = trial["Start"]
-        end = trial["End"]
+        start = pd.Timestamp(trial["Start"])
+        end = pd.Timestamp(trial["End"])
         phase = trial["Phase"]
 
         if (end - start) > timedelta(minutes=10):
@@ -79,3 +79,4 @@ if __name__ == "__main__":
         timesync.run()
 
         del timesync
+
