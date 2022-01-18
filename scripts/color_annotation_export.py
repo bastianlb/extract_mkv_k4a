@@ -11,7 +11,7 @@ from mkv_extractor import TimesynchronizerPCPD, ExportConfig, Path as MkvPath
 
 # INPUT_DIR = "/data/input"
 INPUT_DIR = "/media/narvis/Elements/03_animal_trials/"
-EXPORT_DIR = "/data/export/"
+EXPORT_DIR = "/data/1701_atlas_export/"
 
 
 if __name__ == "__main__":
@@ -63,7 +63,8 @@ if __name__ == "__main__":
         export_config = ExportConfig()
         export_config.export_color = True
         export_config.timesync = True
-        export_config.skip_frames = 10
+        # only export 1FPS
+        export_config.skip_frames = 30
         export_config.start_ts = timedelta(microseconds=start.value // 1000)
         export_config.end_ts = timedelta(microseconds=end.value // 1000)
         logging.info("Exporting color images for: ")
