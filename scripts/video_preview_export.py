@@ -11,7 +11,8 @@ from mkv_extractor import TimesynchronizerPCPD, ExportConfig, Path as MkvPath
 
 # INPUT_DIR = "/data/input"
 INPUT_DIR = "/media/narvis/Elements/03_animal_trials/"
-EXPORT_DIR = "/data/1801_atlas_export/"
+# EXPORT_DIR = "/data/1801_atlas_export_5fps/"
+EXPORT_DIR = "/data/video_preview_2/"
 
 
 if __name__ == "__main__":
@@ -37,6 +38,8 @@ if __name__ == "__main__":
         if recording_dir not in os.listdir(INPUT_DIR):
             logging.info("Trial not found: " + recording_dir)
             continue
+        if "trial_12" not in recording_dir:
+            continue
 
         phase = trial["Phase"]
         trial_path = os.path.join(INPUT_DIR, recording_dir, "recordings")
@@ -60,8 +63,11 @@ if __name__ == "__main__":
             # use only the first 10 minutes right now, don't export forever
             end = start + timedelta(minutes=10)
 
+        end = start + timedelta(minutes=2)
+
         export_config = ExportConfig()
-        export_config.export_color = True
+        # export_config.export_color = True
+        export_config.export_color_video = True
         export_config.timesync = True
         # only export 1FPS
         export_config.skip_frames = 5
