@@ -17,7 +17,8 @@ namespace extract_mkv {
         cv::remap(image, undistorted_image, device_wrapper->rectify_maps.color_map_x,
                   device_wrapper->rectify_maps.color_map_y, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
         cv::Mat out_image;
-        cv::resize(undistorted_image, out_image, cv::Size(512, 384));
+        undistorted_image.copyTo(out_image);
+        // cv::resize(undistorted_image, out_image, cv::Size(512, 384));
         std::ostringstream ss;
         spdlog::debug("Writing color image..");
         ss << std::setw(10) << std::setfill('0') << frame_counter << "_color.jpg";

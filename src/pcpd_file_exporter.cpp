@@ -199,7 +199,7 @@ namespace extract_mkv {
     // note: lifecycle is not managed by this function. They are stored and cleaned up later.
     feed->m_processed_data->feed_name = feed->m_feed_name;
     if (m_export_config.process_color()) {
-      if (feed->pcpd_extract_color(feed->m_processed_data->color_image, image_timestamp)) {
+      if (feed->pcpd_extract_color(feed->m_processed_data->color_image, image_timestamp, true)) {
         ts_exported = true;
       }
     }
@@ -548,11 +548,11 @@ namespace extract_mkv {
     }
     if (write) {
       auto path_template = "depth_frame_{0}.tiff";
-      spdlog::info("Export depth frame: {0} with size {1} and timestamp: {2}", 
-          m_frame_counter, depth_image.size(), block.data->device_timestamp_ns);
+      spdlog::info("Export depth frame: {0} with size {1} and timestamp: {2}",
+                   m_frame_counter, depth_image.size(), block.data->device_timestamp_ns);
       fs::path fp = (m_output_dir / fmt::format(path_template, m_frame_counter)).string();
       cv::Mat image;
-      depth_image.convertTo(image, CV_8UC1);
+      depth_image.convertTo(image, CV_16UC1);
       cv::imwrite(fp, image);
     }
     return true;

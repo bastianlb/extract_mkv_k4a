@@ -37,6 +37,7 @@ class ExportMKVConan(ConanFile):
         "tbb/2020.3",
         "jsoncpp/1.9.4",
         "happly/cci.20200822",
+        "gtest/cci.20210126",
     )
 
     default_options = {

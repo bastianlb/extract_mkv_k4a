@@ -11,6 +11,7 @@ namespace KPU {
             case pcpd::datatypes::PixelFormatType::MJPEG:
                 return 32;
             case pcpd::datatypes::PixelFormatType::RGB:
+                return 24;
             case pcpd::datatypes::PixelFormatType::BGR:
                 return 24;
             case pcpd::datatypes::PixelFormatType::DEPTH:
@@ -178,11 +179,16 @@ namespace KPU {
         out.intrinsics.parameters.param.k6 = params.radial_distortion(5);
         out.intrinsics.parameters.param.p1 = params.tangential_distortion(0);
         out.intrinsics.parameters.param.p2 = params.tangential_distortion(1);
+        // the extrinsics need to be initialzed properly
+        float rot[9] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
+        float trans[3] = {0, 0, 0};
+        memcpy(&out.extrinsics.rotation, rot, 9 * sizeof(float));
+        memcpy(&out.extrinsics.translation, trans, 3 * sizeof(float));
 
         out.resolution_width = static_cast<int>(params.width);
         out.resolution_height = static_cast<int>(params.height);
         // TODO: check this.. pcpd has 1.7f hardcoded in new version??
-        out.metric_radius = 1.7f; // params.metric_radius;
+        out.metric_radius = 1.74f; // params.metric_radius;
         out.intrinsics.type = K4A_CALIBRATION_LENS_DISTORTION_MODEL_BROWN_CONRADY;
         out.intrinsics.parameter_count = 14;
         return true;

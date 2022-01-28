@@ -10,7 +10,6 @@
 #include "serialization/capnproto_serialization.h"
 #include "boost/algorithm/string/split.hpp"
 #include "boost/algorithm/string/classification.hpp"
-#include "extract_mkv/kinect4azure_capture_wrapper.h"
 #include "pcpd/config.h"
 #include "pcpd/rttr_registration.h"
 #include "pcpd/record/enumerations.h"

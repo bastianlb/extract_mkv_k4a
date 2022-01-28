@@ -35,12 +35,12 @@ namespace extract_mkv {
             std::chrono::microseconds m_last_depth_ts;
             std::mutex m_worker_lock;
             Eigen::Affine3f m_extrinsics = Eigen::Affine3f::Identity();
+            k4a::calibration m_calibration;
 
         protected:
             k4a::playback m_dev;
             k4a::capture m_capture{NULL};
             k4a_record_configuration_t m_dev_config;
-            k4a::calibration m_calibration;
             const fs::path m_input_filename;
             const fs::path m_output_directory;
             std::ostringstream m_tsss;

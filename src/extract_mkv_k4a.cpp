@@ -254,7 +254,7 @@ namespace extract_mkv {
                 image_path = output_directory / s.str();
                 cv::Mat image;
                 image_buffer.convertTo(image, CV_8UC1);
-                cv::imwrite(image_path, image);
+                //cv::imwrite(image_path, image);
             } else {
                 spdlog::warn("Received depth frame with unexpected format: {0}", input_depth_image.get_format());
                 throw MissingDataException();
@@ -357,7 +357,7 @@ namespace extract_mkv {
         }
 
         k4a_transformation_t transformation = k4a_transformation_create(&device_wrapper->calibration);
-        if (K4A_RESULT_SUCCEEDED !=
+        if (transformation == nullptr || K4A_RESULT_SUCCEEDED !=
                 k4a_transformation_depth_image_to_color_camera(transformation, input_depth_image.handle(),
                                                                transformed_depth_image))
         {
@@ -458,7 +458,7 @@ namespace extract_mkv {
         }
 
         k4a_transformation_t transformation = k4a_transformation_create(&device_wrapper->calibration);
-        if (K4A_RESULT_SUCCEEDED !=
+        if (transformation == nullptr || K4A_RESULT_SUCCEEDED !=
                 k4a_transformation_color_image_to_depth_camera(transformation, input_depth_image.handle(), color_image.handle(), transformed_color_image))
         {
             spdlog::error("Failed to compute transformed color image");

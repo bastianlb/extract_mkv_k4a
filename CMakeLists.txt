@@ -31,10 +31,10 @@ SET(PCPD_HEADERS)
 SET(APP_SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}/src/transformation_helpers.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/extract_mkv_k4a.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/timesync.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/h264.cpp"
     )
+
 
 SET(PCPD_HEADERS)
 
@@ -80,7 +80,7 @@ if(WITH_PCPD)
 
     message("Directories linked...")
 
-    SET (PCPD_LIBS
+    SET(PCPD_LIBS
         Threads::Threads
         ringbuffer
         kj
@@ -101,18 +101,39 @@ SET(PCPD_SOURCES
     )
 endif ()
 
-add_executable(${TARGET_NAME} ${APP_SOURCES} ${APP_HEADERS} ${PCPD_SOURCES} ${PCPD_HEADERS})
+add_library(${TARGET_NAME} ${APP_SOURCES} ${APP_HEADERS} ${PCPD_SOURCES} ${PCPD_HEADERS})
+
+# build main lib
 set_property(TARGET ${TARGET_NAME} PROPERTY CXX_STANDARD 17)
 set_target_properties(${TARGET_NAME} PROPERTIES LINKER_LANGUAGE CXX)
 SET(MAIN_LIBS
     ${CONAN_LIBS}
     stdc++fs
 )
-
-add_executable(mkvinfo src/mkvinfo.cpp)
-target_link_libraries(mkvinfo PUBLIC ${CONAN_LIBS} ${PCPD_LIBS})
-
 target_link_libraries(${TARGET_NAME} PUBLIC ${MAIN_LIBS} ${PCPD_LIBS})
+
+target_include_directories(${TARGET_NAME} PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>
+        PRIVATE
+        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+        )
+
+install(TARGETS ${TARGET_NAME}
+        DESTINATION ${MAGNUM_BINARY_INSTALL_DIR})
+
+# executable
+set(TARGET_NAME extract)
+add_executable(${TARGET_NAME} "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp")
+
+set_property(TARGET ${TARGET_NAME} PROPERTY CXX_STANDARD 17)
+set_target_properties(${TARGET_NAME} PROPERTIES LINKER_LANGUAGE CXX)
+SET(MAIN_LIBS
+    ${CONAN_LIBS}
+    stdc++fs
+)
+target_link_libraries(${TARGET_NAME} PUBLIC extract_mkv ${MAIN_LIBS} ${PCPD_LIBS})
 
 target_include_directories(${TARGET_NAME} PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
@@ -145,3 +166,5 @@ set_target_properties(${LIB_NAME} PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_
 
 set(ENV{LD_LIBRARY_PATH} "${ENV_LD_LIBRARY_PATH_ORG}")
 set(PYTHON_HOME ${Python3_STDLIB})
+
+add_subdirectory("tests/")
