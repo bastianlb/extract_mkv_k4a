@@ -21,3 +21,5 @@ void tranformation_helpers_write_point_cloud(std::vector<color_point_t> points,
 cv::Size get_camera_depth_resolution(k4a_depth_mode_t depth_mode);
 
 cv::Size get_camera_color_resolution(k4a_color_resolution_t color_mode);
+
+void opengl_to_opencv_transform(Eigen::Matrix4f, Eigen::Matrix4f&);

@@ -6,12 +6,14 @@
 #include <spdlog/spdlog.h>
 
 #include <opencv2/cudaarithm.hpp>
+#include <Eigen/Dense>
 
 #include "extract_mkv/pcpd_file_exporter.h"
 #include "extract_mkv/kinect4azure_capture_wrapper.h"
 #include "extract_mkv/timesync.h"
 #include "extract_mkv/extract_mkv_k4a.h"
 #include "extract_mkv/export.h"
+#include "extract_mkv/transformation_helpers.h"
 #include "pcpd/processing/cuda/detail/error_handling.cuh"
 #include "pcpd/processing/cuda/detail/hardware.cuh"
 #include "pcpd/processing/cuda/detail/developer_tools.cuh"
@@ -476,6 +478,12 @@ namespace extract_mkv {
     artekmed::schema::RecordingSchema::Reader reader = message.getRoot<artekmed::schema::RecordingSchema>();
     const std::string& mkv_name = reader.getName();
     pcpd::datatypes::DeviceCalibration device_calibration;
+    Eigen::Matrix4f color2depth, color2depth_opencv;
+    device_calibration.color2depth_transform.toMatrix4f(color2depth);
+    opengl_to_opencv_transform(color2depth, color2depth_opencv);
+
+    device_calibration.color2depth_transform.rotation = color2depth_opencv.block<3, 3>(0, 0);
+    device_calibration.color2depth_transform.translation = color2depth_opencv.block<3, 1>(0, 3);
     KPU::deserializeCalibrations(reader, device_calibration);
     KPU::toK4A(device_calibration, m_calibration);
   }

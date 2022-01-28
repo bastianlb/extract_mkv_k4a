@@ -117,3 +117,22 @@ cv::Size get_camera_color_resolution(k4a_color_resolution_t color_mode) {
     }
     return cv::Size(width, height);
 }
+
+void opengl_to_opencv_transform(Eigen::Matrix4f input, Eigen::Matrix4f& transform) {
+    // copy eigen matrix data
+    transform = input;
+
+    // flip y and z from opengl to opencv convention
+    Eigen::Matrix4f yz_transform = Eigen::Matrix4f::Identity();
+    yz_transform(1,1) = -1.0;
+    yz_transform(2,2) = -1.0;
+    transform = yz_transform * transform * yz_transform.transpose();
+
+    // flip back to a convention where Z is up.
+    Eigen::Matrix4f swap_y_z = Eigen::Matrix4f::Zero();
+    auto m = Eigen::AngleAxisf(-0.5*M_PI, Eigen::Vector3f::UnitX());
+    swap_y_z.block<3, 3>(0, 0) = m.toRotationMatrix();
+    swap_y_z(3, 3) = 1;
+
+    transform = swap_y_z * transform;
+}

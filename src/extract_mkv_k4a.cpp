@@ -13,6 +13,7 @@
 
 #include "extract_mkv/extract_mkv_k4a.h"
 #include "extract_mkv/filesystem.h"
+#include "extract_mkv/transformation_helpers.h"
 
 
 namespace extract_mkv {
@@ -84,20 +85,8 @@ namespace extract_mkv {
             transform.block<3, 3>(0, 0) = q.toRotationMatrix();
             transform.block<3, 1>(0, 3) = t;
 
-            // flip y and z from opengl to opencv convention
-            Eigen::Matrix4f yz_transform = Eigen::Matrix4f::Identity();
-            yz_transform(1,1) = -1.0;
-            yz_transform(2,2) = -1.0;
-            transform = yz_transform * transform * yz_transform.transpose();
+            opengl_to_opencv_transform(transform, m_extrinsics.matrix());
 
-            // flip back to a convention where Z is up.
-            Eigen::Matrix4f swap_y_z = Eigen::Matrix4f::Zero();
-            auto m = Eigen::AngleAxisf(-0.5*M_PI, Eigen::Vector3f::UnitX());
-            swap_y_z.block<3, 3>(0, 0) = m.toRotationMatrix();
-            swap_y_z(3, 3) = 1;
-
-            transform = swap_y_z * transform;
-            m_extrinsics.matrix() = transform;
             std::cout << "Cam " << m_name << " extrinsics: " << m_extrinsics.matrix() << std::endl;
             // write camera extrinsics
             std::ofstream file_id;
