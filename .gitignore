@@ -4,6 +4,5 @@ cmake/*
 .python-version
 ./data/*
 tmp/
-test_data/
 .ccls-cache/
 test_system/
