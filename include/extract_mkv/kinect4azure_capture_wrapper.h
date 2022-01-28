@@ -20,7 +20,7 @@ namespace KPU {
     bool deserializeCalibrations(artekmed::schema::RecordingSchema::Reader&,
                                  pcpd::datatypes::DeviceCalibration&);
     bool intrinsicsToK4A(const pcpd::datatypes::IntrinsicParameters& params, k4a_calibration_camera_t& out);
-    bool extrinsicsToK4A(pcpd::datatypes::ExtrinsicParameters extrinsics, k4a_calibration_extrinsics_t& out, float units_per_meter=1000);
+    bool extrinsicsToK4A(pcpd::datatypes::ExtrinsicParameters extrinsics, k4a_calibration_extrinsics_t& out, float units_per_meter=1000, bool inv=false);
     bool toK4A(const pcpd::datatypes::DeviceCalibration& calibration, k4a::calibration& out, float units_per_meter=1000);
 
     struct Kinect4AzureCaptureWrapper {

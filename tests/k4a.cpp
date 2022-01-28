@@ -21,7 +21,8 @@ void createAlphaImage(const cv::Mat& mat, cv::Mat_<cv::Vec4b>& dst)
 }
 
 void getK4Acalib(k4a::calibration& calib) {
-  fs::path in_file{"/media/storage/recording_20201207_BodyTracking_3Person_Table/cn01/capture.mkv"};
+  fs::path in_file{"/media/narvis/atlas_4/archive_atlas_or01/03_animal_trials/210914_animal_trial_03/calibrations/calibration_01/recordings/cn01/capture-000000.mkv"};
+  assert(fs::exists(in_file));
   K4AFrameExtractor extract{in_file.string(), "./", "test", ExportConfig{}};
   calib = extract.m_calibration;
 }
@@ -147,17 +148,17 @@ TEST(HelloTest, BasicAssertions) {
   rot(1, 2) = r.at<float>(1, 2);
   rot(2, 0) = r.at<float>(2, 0);
   rot(2, 1) = r.at<float>(2, 1);
-  rot(1, 2) = r.at<float>(1, 2);
+  rot(2, 2) = r.at<float>(2, 2);
 
 
   //Eigen::Quaternion<float> rot;
-  pcpd::datatypes::ExtrinsicParameters depth2color_transform{trans, Eigen::Quaternionf{rot}};
+  pcpd::datatypes::ExtrinsicParameters color2depth_transform{trans, Eigen::Quaternionf{rot}};
   pcpd::datatypes::ExtrinsicParameters camera_pose{};
   pcpd::datatypes::DeviceCalibration device_calibration{d_intrinsics, c_intrinsics, 
-                                                        depth2color_transform, camera_pose, true};
+                                                        color2depth_transform, camera_pose, true};
   fs::path output_dir{"./"};
   k4a::calibration calibration;
-  KPU::toK4A(device_calibration, calibration);
+  KPU::toK4A(device_calibration, calibration, 1);
   auto device_wrapper = std::make_shared<extract_mkv::K4ADeviceWrapper>();
   device_wrapper->calibration = calibration;
   auto rectify_maps = extract_mkv::process_calibration(calibration, output_dir);
@@ -165,6 +166,7 @@ TEST(HelloTest, BasicAssertions) {
 
   k4a::calibration k4a_calib;
   getK4Acalib(k4a_calib);
+  //device_wrapper->calibration = k4a_calib;
 
   extract_mkv::process_rgbd(k4a_wrapper->capture_handle.get_color_image(),
                             k4a_wrapper->capture_handle.get_depth_image(),

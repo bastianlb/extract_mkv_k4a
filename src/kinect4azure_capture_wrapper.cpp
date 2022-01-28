@@ -1,8 +1,7 @@
 #include <spdlog/spdlog.h>
 #include "extract_mkv/kinect4azure_capture_wrapper.h"
 
-namespace KPU {
-    int pixelFormatToBits(pcpd::datatypes::PixelFormatType pixel_format)
+namespace KPU { int pixelFormatToBits(pcpd::datatypes::PixelFormatType pixel_format)
     {
         switch(pixel_format)
         {
@@ -193,9 +192,13 @@ namespace KPU {
         out.intrinsics.parameter_count = 14;
         return true;
     }
-    bool extrinsicsToK4A(pcpd::datatypes::ExtrinsicParameters extrinsics, k4a_calibration_extrinsics_t& out, float units_per_meter) {
+    bool extrinsicsToK4A(pcpd::datatypes::ExtrinsicParameters extrinsics, k4a_calibration_extrinsics_t& out, float units_per_meter, bool inv) {
         auto trans = extrinsics.translation;
         auto rot = extrinsics.rotation.normalized().toRotationMatrix();
+        if (inv) {
+            trans = -1 * trans;
+            rot = rot.inverse().eval();
+        }
         out.translation[0] = trans(0) * units_per_meter;
         out.translation[1] = trans(1) * units_per_meter;
         out.translation[2] = trans(2) * units_per_meter;
@@ -210,11 +213,19 @@ namespace KPU {
         out.rotation[8] = rot(2, 2);
         return true;
     }
-    bool toK4A(const pcpd::datatypes::DeviceCalibration& calibration, k4a::calibration& out, float units_per_meter) {
+    bool toK4A(const pcpd::datatypes::DeviceCalibration& calibration, k4a::calibration& out, float units_per_meter /* = 1000 */) {
         bool result{true};
         result &= extrinsicsToK4A(calibration.color2depth_transform, out.extrinsics[K4A_CALIBRATION_TYPE_COLOR][K4A_CALIBRATION_TYPE_DEPTH], units_per_meter);
+        result &= extrinsicsToK4A(calibration.color2depth_transform, out.extrinsics[K4A_CALIBRATION_TYPE_DEPTH][K4A_CALIBRATION_TYPE_COLOR], units_per_meter, true);
         result &= intrinsicsToK4A(calibration.depth_parameters, out.depth_camera_calibration);
         result &= intrinsicsToK4A(calibration.color_parameters, out.color_camera_calibration);
+        // update the extrinsics for the color_calibration-camera. depth calibration remains identity for some reason
+        memcpy(&out.color_camera_calibration.extrinsics.rotation, 
+               out.extrinsics[K4A_CALIBRATION_TYPE_DEPTH][K4A_CALIBRATION_TYPE_COLOR].rotation,
+               9 * sizeof(float));
+        memcpy(&out.color_camera_calibration.extrinsics.translation, 
+               out.extrinsics[K4A_CALIBRATION_TYPE_DEPTH][K4A_CALIBRATION_TYPE_COLOR].translation,
+               3 * sizeof(float));
         // calibration.camera_pose is not available in K4A structs
         out.depth_mode = K4A_DEPTH_MODE_NFOV_UNBINNED;
         out.color_resolution = K4A_COLOR_RESOLUTION_1536P;
