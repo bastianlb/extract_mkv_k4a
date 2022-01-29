@@ -34,6 +34,7 @@
 
 #include "extract_mkv/timesync.h"
 #include "extract_mkv/filesystem.h"
+#include <X11/Xlib.h>
 
 #ifdef WITH_PCPD
 #include "extract_mkv/pcpd_file_exporter.h"
@@ -212,6 +213,8 @@ namespace Magnum {
     int ExtractFramesMKV::exec() {
         //Debug{} << "Core profile:" << GL::Context::current().isCoreProfile();
         //Debug{} << "Context flags:" << GL::Context::current().flags();
+        // sometimes get weird gtk error when threading and this is not called
+        XInitThreads();
 
         if (m_file_mode == PCPD) {
 #ifdef WITH_PCPD
