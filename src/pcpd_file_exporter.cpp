@@ -155,9 +155,11 @@ namespace extract_mkv {
         }
         std::vector<std::shared_future<bool>> futures;
 
-        m_frame_map_lock.lock();
-        m_frame_map[frame_id] = std::make_unique<DataGroup>();
-        m_frame_map_lock.unlock();
+        if (m_export_config.grouped_process()) {
+          m_frame_map_lock.lock();
+          m_frame_map[frame_id] = std::make_unique<DataGroup>();
+          m_frame_map_lock.unlock();
+        }
 
         for (auto feed : m_input_feeds) {
           // reset frame count, we received a frame.
@@ -170,22 +172,28 @@ namespace extract_mkv {
           spdlog::debug("Submitting process feed task for {0}, {1}", feed->m_feed_name, frame_id);
 
           std::shared_ptr<ProcessedData> processed_data = std::move(feed->m_processed_data);
-          m_frame_map_lock.lock();
-          m_frame_map[frame_id]->feed_data_map[feed->get_feed_id()] = processed_data;
-          m_frame_map_lock.unlock();
+          if (m_export_config.grouped_process()) {
+            m_frame_map_lock.lock();
+            m_frame_map[frame_id]->feed_data_map[feed->get_feed_id()] = processed_data;
+            m_frame_map_lock.unlock();
+          }
           std::shared_future<bool> task_future = m_thread_pool.submit(
                [=] {
                  // TODO: need a way of synchronizing and waiting until we can delete
                  // from frame map
+                 processed_data->lock.lock();
                  process_feed(feed, processed_data, frame_id);
+                 processed_data->lock.unlock();
                }
-           );
+          );
         }
         spdlog::debug("Submitting monitor task {0}", frame_id);
       }
       // process remaining frames
       m_is_running = false;
-      monitor_frame_map(true);
+      if (m_export_config.grouped_process()) {
+        monitor_frame_map(true);
+      }
       spdlog::info("Finishing.. total {0} frames exported", m_frames_exported / m_export_config.skip_frames);
       shutdown();
   };
@@ -201,12 +209,12 @@ namespace extract_mkv {
     // note: lifecycle is not managed by this function. They are stored and cleaned up later.
     feed->m_processed_data->feed_name = feed->m_feed_name;
     if (m_export_config.process_color()) {
-      if (feed->pcpd_extract_color(feed->m_processed_data->color_image, image_timestamp, true)) {
+      if (feed->pcpd_extract_color(feed->m_processed_data->color_image, image_timestamp, false)) {
         ts_exported = true;
       }
     }
     if (m_export_config.process_depth()) {
-      if (feed->pcpd_extract_depth(feed->m_processed_data->depth_image, image_timestamp, true)) {
+      if (feed->pcpd_extract_depth(feed->m_processed_data->depth_image, image_timestamp, false)) {
         // TODO: we want to use actual depth timecode timestamps at some point..
         // need to get these out of the mkvs
         ts_exported = true;
@@ -214,7 +222,7 @@ namespace extract_mkv {
     }
 
     if (m_export_config.process_infrared()) {
-      if (feed->pcpd_extract_infrared(feed->m_processed_data->ir_image, image_timestamp, true)) {
+      if (feed->pcpd_extract_infrared(feed->m_processed_data->ir_image, image_timestamp, false)) {
         ts_exported = true;
       }
     }
@@ -237,30 +245,9 @@ namespace extract_mkv {
   bool TimesynchronizerPCPD::process_feed(std::shared_ptr<PCPDFileChannel> feed,
       std::shared_ptr<ProcessedData> data, const int frame_id) {
     // spdlog::trace("Got timestamp {0} from feed {1}", image_timestamp.count(), feed->m_feed_name);
+
     auto k4a_wrapper = std::make_shared<KPU::Kinect4AzureCaptureWrapper>(feed->m_feed_name);
     assert(k4a_wrapper->capture_handle != nullptr);
-
-    cv::Mat color_image;
-    if (m_export_config.process_color()) {
-      if (data->color_image.empty()) {
-        spdlog::warn("Color image incomplete! {0} for feed {1}", frame_id, data->feed_name);
-        return false;
-      }
-      data->color_image.download(color_image);
-      // color needs to be set on wrapper
-      uint64_t depth_ts_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(data->timestamp_us).count();
-      size_t stride = (data->color_image.cols * data->color_image.elemSize());
-      size_t nbytes = stride * data->color_image.rows;
-      bool ret = k4a_wrapper->setColorImage(depth_ts_ns,
-                                            depth_ts_ns, feed->m_color_image_width,
-                                            feed->m_color_image_height, stride,
-                                            (void*) (color_image.data),
-                                            nbytes, feed->m_color_pixel_format);
-
-      if (!ret)
-        spdlog::warn("Failed to set color image on wrapper!");
-
-    }
 
     uint64_t depth_ts_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(data->timestamp_us).count();
     if (m_export_config.process_depth()) {
@@ -275,6 +262,45 @@ namespace extract_mkv {
                                             nbytes);
       if (!ret)
         spdlog::warn("Failed to set depth image on wrapper!");
+
+    }
+
+    if (m_export_config.export_depth) {
+        process_depth(k4a_wrapper->capture_handle.get_depth_image(),
+                      feed->m_device_wrapper,
+                      feed->get_output_dir(),
+                      frame_id);
+    }
+
+    if (m_export_config.export_rgbd) {
+      process_rgbd(k4a_wrapper->capture_handle.get_depth_image(),
+                   feed->m_color_image_width, feed->m_color_image_height,
+                   feed->m_device_wrapper,
+                   feed->get_output_dir(),
+                   frame_id);
+    }
+
+    cv::Mat color_image;
+    if (m_export_config.process_color()) {
+      if (data->color_image.empty()) {
+        spdlog::warn("Color image incomplete! {0} for feed {1}", frame_id, data->feed_name);
+        return false;
+      }
+      //process_depth_raw(data->depth_image, std::string("before_download_depth"), feed->get_output_dir(), frame_id);
+      data->color_image.download(color_image);
+      //process_depth_raw(data->depth_image, std::string("after_download_depth"), feed->get_output_dir(), frame_id);
+      // color needs to be set on wrapper
+      uint64_t depth_ts_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(data->timestamp_us).count();
+      size_t stride = (data->color_image.cols * data->color_image.elemSize());
+      size_t nbytes = stride * data->color_image.rows;
+      bool ret = k4a_wrapper->setColorImage(depth_ts_ns,
+                                            depth_ts_ns, feed->m_color_image_width,
+                                            feed->m_color_image_height, stride,
+                                            (void*) (color_image.data),
+                                            nbytes, feed->m_color_pixel_format);
+
+      if (!ret)
+        spdlog::warn("Failed to set color image on wrapper!");
 
     }
 
@@ -301,13 +327,6 @@ namespace extract_mkv {
                           frame_id);
     }
 
-    if (m_export_config.export_depth) {
-        process_depth(k4a_wrapper->capture_handle.get_depth_image(),
-                      feed->m_device_wrapper,
-                      feed->get_output_dir(),
-                      frame_id);
-    }
-
     if (m_export_config.export_infrared) {
       process_ir(k4a_wrapper->capture_handle.get_ir_image(),
                  feed->m_device_wrapper,
@@ -315,13 +334,8 @@ namespace extract_mkv {
                  frame_id);
     }
 
-    if (m_export_config.export_rgbd) {
-      process_rgbd(k4a_wrapper->capture_handle.get_color_image(),
-                   k4a_wrapper->capture_handle.get_depth_image(),
-                   feed->m_device_wrapper,
-                   feed->get_output_dir(),
-                   frame_id);
-    }
+    // TODO: for some reason depth gets corrupted by color image download.
+    // currently can't process pointcloud
 
     if (m_export_config.export_pointcloud) {
       process_pointcloud(k4a_wrapper->capture_handle.get_color_image(),
@@ -366,6 +380,8 @@ namespace extract_mkv {
           std::map<int, cv::cuda::GpuMat> color_images;
           for (auto it : element->second->feed_data_map) {
             auto wrapper = it.second;
+            // lock each wrapper..
+            wrapper->lock.lock();
             if (!wrapper->color_image.empty()) {
               int feed_id = it.first;
               color_images[feed_id] = wrapper->color_image;
@@ -373,8 +389,10 @@ namespace extract_mkv {
             };
           }
           //all images present
-          // TODO: make thread safe
           m_video_writer.write_frames(color_images, timestamp);
+          for (auto it : element->second->feed_data_map) {
+            it.second->lock.unlock();
+          }
           // standard associative-container erase idiom.
         }
         spdlog::debug("Removing iterated map element");
@@ -548,7 +566,11 @@ namespace extract_mkv {
     assert(width == m_depth_image_width);
     assert(height == m_depth_image_height);
 
-    depth_image = cv::Mat(height, width, CV_16U, depth_out.data());
+    // depth_image = cv::Mat(height, width, CV_16U, depth_out.data());
+    // TODO: how to make depth_out thread safe?
+    // can we decompress directly into depth_image
+    cv::Mat tmp_data{height, width, CV_16U, depth_out.data()};
+    tmp_data.copyTo(depth_image);
 
     if (ret != zdepth::DepthResult::Success) {
       spdlog::error("Export failed for frame {0}", m_frame_counter);

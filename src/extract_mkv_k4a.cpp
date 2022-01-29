@@ -184,7 +184,8 @@ namespace extract_mkv {
             }
 
             if (m_export_config.export_rgbd && input_depth_image.is_valid() && input_color_image.is_valid()) {
-                process_rgbd(input_color_image, input_depth_image, wrapper, m_output_directory, frame_counter);
+                process_rgbd(input_depth_image, input_color_image.get_width_pixels(),
+                             input_color_image.get_height_pixels(), wrapper, m_output_directory, frame_counter);
             }
 
             if (m_export_config.export_pointcloud && input_depth_image.is_valid() && input_color_image.is_valid()) {
@@ -321,16 +322,13 @@ namespace extract_mkv {
         return timestamp;
     }
 
-    void process_rgbd(k4a::image input_color_image,
-                      k4a::image input_depth_image,
+    void process_rgbd(k4a::image input_depth_image,
+                      int color_image_width_pixels, int color_image_height_pixels,
                       std::shared_ptr<K4ADeviceWrapper> device_wrapper,
                       fs::path output_directory, int frame_counter) {
 
-        int color_image_width_pixels = k4a_image_get_width_pixels(input_color_image.handle());
-        int color_image_height_pixels = k4a_image_get_height_pixels(input_color_image.handle());
-
-        if (!(input_color_image.is_valid() && input_depth_image.is_valid())) {
-            spdlog::warn("Export RGBD requires depth and color image.");
+        if (!(input_depth_image.is_valid())) {
+            spdlog::warn("Export RGBD requires a valid depth image.");
             throw MissingDataException();
         }
         k4a_image_t transformed_depth_image;
@@ -365,13 +363,17 @@ namespace extract_mkv {
         double maxVal;
 
         cv::minMaxLoc(image_buffer, &minVal, &maxVal);
-        spdlog::info("RGBD min: {0}, max: {1}", minVal, maxVal);
+        spdlog::debug("RGBD min: {0}, max: {1}", minVal, maxVal);
         cv::Mat undistorted_image;
         // undistort using color image rectify maps?
         cv::remap(image_buffer, undistorted_image, device_wrapper->rectify_maps.color_map_x,
                   device_wrapper->rectify_maps.color_map_y, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
 
-        cv::imwrite(image_path, undistorted_image);
+        cv::Mat out_image;
+        //undistorted_image.copyTo(out_image);
+        // TODO: generalize this into configs
+        cv::resize(undistorted_image, out_image, cv::Size(512, 384));
+        cv::imwrite(image_path, out_image);
         std::ostringstream s;
         s << std::setw(10) << std::setfill('0') << frame_counter << "_distorted_rgbd.tiff";
         image_path = output_directory / s.str();

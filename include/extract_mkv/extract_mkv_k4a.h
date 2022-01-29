@@ -58,7 +58,7 @@ namespace extract_mkv {
     int process_depth(k4a::image, std::shared_ptr<K4ADeviceWrapper>, fs::path, int);
     int process_color(k4a::image, std::shared_ptr<K4ADeviceWrapper>, fs::path, int);
     void process_ir(k4a::image, std::shared_ptr<K4ADeviceWrapper>, fs::path, int);
-    void process_rgbd(k4a::image, k4a::image, std::shared_ptr<K4ADeviceWrapper>, fs::path, int);
+    void process_rgbd(k4a::image, int, int, std::shared_ptr<K4ADeviceWrapper>, fs::path, int);
     void process_pointcloud(k4a::image, k4a::image, std::shared_ptr<K4ADeviceWrapper>, fs::path, int, bool align_clouds=false);
     void process_pose(std::shared_ptr<K4ADeviceWrapper>, fs::path, int);
     void compute_undistortion_intrinsics();

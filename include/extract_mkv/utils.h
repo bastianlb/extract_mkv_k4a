@@ -45,6 +45,10 @@ namespace extract_mkv {
         bool process_infrared() {
             return export_infrared || export_bodypose;
         }
+        bool grouped_process() {
+            // group frames for batch process
+            return export_color_video;
+        }
 
         friend std::ostream &operator<<(std::ostream &os, const ExportConfig &c) {
             return os << "[ExportConfig: " 
@@ -76,11 +80,12 @@ namespace extract_mkv {
         public:
             explicit ProcessedData() = default;
             std::string feed_name;
-            cv::cuda::GpuMat color_image;
             cv::Mat depth_image;
             cv::Mat ir_image;
+            cv::cuda::GpuMat color_image;
             int frame_id;
             std::chrono::microseconds timestamp_us;
+            std::mutex lock;
     };
 
     class DataGroup {

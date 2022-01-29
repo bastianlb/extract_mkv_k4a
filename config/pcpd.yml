@@ -7,16 +7,16 @@ record:
   input_dir: "/media/storage/atlas_recordings/recordings_2809_recording_2"
   feeds:
     - "cn01/"
-      # - "cn02/"
-      # - "cn03/"
-      # - "cn04/"
+    - "cn02/"
+    - "cn03/"
+    - "cn04/"
   output:
     # - timestamp
     - color
       # - color_video
-    - depth
+      # - depth
     # - infrared
-    # - rgbd
+    - rgbd
     # - pointcloud
     # - align_clouds
     # - bodypose
