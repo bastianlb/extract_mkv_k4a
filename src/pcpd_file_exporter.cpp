@@ -550,6 +550,7 @@ namespace extract_mkv {
   }
 
   bool PCPDFileChannel::pcpd_extract_depth(cv::Mat& depth_image, std::chrono::microseconds &timestamp, bool write /* =false */) {
+    auto zdepth_compressor = std::make_shared<zdepth::DepthCompressor>();
     uint8 bits_per_element = 16;
     MkvDataBlock2 block;
     if(!m_loader->getNextDataBlock(block, DEPTH_TRACK_KEY)) {
@@ -560,9 +561,12 @@ namespace extract_mkv {
     int height;
 
     spdlog::debug("Extracting depth image from mkv");
-    std::vector<uint16_t> depth_out {};
-    auto zdepth_compressor = std::make_shared<zdepth::DepthCompressor>();
-    zdepth::DepthResult ret = zdepth_compressor->Decompress(block.data->data_block, width, height, depth_out);
+    size_t n_bytes = m_depth_image_height * m_depth_image_width * bits_per_element;
+    depth_image.create(cv::Size(m_depth_image_width, m_depth_image_height), CV_16UC1);
+    std::vector<uint16_t> depth_wrapper {};
+    wrapArrayInVector((uint16_t *)depth_image.data, n_bytes, depth_wrapper);
+    zdepth::DepthResult ret = zdepth_compressor->Decompress(block.data->data_block, width, height, depth_wrapper);
+    releaseVectorWrapper(depth_wrapper);
     timestamp = std::chrono::microseconds{block.data->device_timestamp_usec};
 
     assert(width == m_depth_image_width);
@@ -571,8 +575,8 @@ namespace extract_mkv {
     // depth_image = cv::Mat(height, width, CV_16U, depth_out.data());
     // TODO: how to make depth_out thread safe?
     // can we decompress directly into depth_image
-    cv::Mat tmp_data{height, width, CV_16U, depth_out.data()};
-    tmp_data.copyTo(depth_image);
+    //cv::Mat tmp_data{height, width, CV_16U, depth_out.data()};
+    //tmp_data.copyTo(depth_image);
 
     if (ret != zdepth::DepthResult::Success) {
       spdlog::error("Export failed for frame {0}", m_frame_counter);

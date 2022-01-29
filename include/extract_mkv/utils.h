@@ -199,4 +199,18 @@ namespace extract_mkv {
             std::string m_filename;
             cv::VideoWriter m_writer{};
     };
+    template <class T>
+    void wrapArrayInVector( T *sourceArray, size_t arraySize, std::vector<T, std::allocator<T> > &targetVector ) {
+      typename std::_Vector_base<T, std::allocator<T> >::_Vector_impl *vectorPtr =
+        (typename std::_Vector_base<T, std::allocator<T> >::_Vector_impl *)((void *) &targetVector);
+      vectorPtr->_M_start = sourceArray;
+      vectorPtr->_M_finish = vectorPtr->_M_end_of_storage = vectorPtr->_M_start + arraySize;
+    }
+
+    template <class T>
+    void releaseVectorWrapper( std::vector<T, std::allocator<T> > &targetVector ) {
+      typename std::_Vector_base<T, std::allocator<T> >::_Vector_impl *vectorPtr =
+            (typename std::_Vector_base<T, std::allocator<T> >::_Vector_impl *)((void *) &targetVector);
+      vectorPtr->_M_start = vectorPtr->_M_finish = vectorPtr->_M_end_of_storage = NULL;
+    }
 }
