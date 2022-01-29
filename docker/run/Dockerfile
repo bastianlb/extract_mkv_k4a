@@ -11,6 +11,8 @@ WORKDIR /extract_mkv/build
 RUN cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc-7 -DCMAKE_CXX_COMPILER=g++-7 -DWITH_PCPD=ON -DPCPD_DIR=/pcpd/ && \
     cmake --build . --parallel 12
 
+RUN python3 -m pip install pandas
+
 ENV LD_LIBRARY_PATH /extract_mkv/build/lib:/usr/local/cuda-11.1/lib64/:/usr/lib/x86_64-linux-gnu/:${LD_LIBRARY_PATH}
 RUN mkdir /deploy
 RUN mkdir -p /data/input /data/export

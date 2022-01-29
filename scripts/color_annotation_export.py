@@ -11,7 +11,7 @@ from mkv_extractor import TimesynchronizerPCPD, ExportConfig, Path as MkvPath
 
 # INPUT_DIR = "/data/input"
 INPUT_DIR = "/media/narvis/Elements/03_animal_trials/"
-EXPORT_DIR = "/data/1801_atlas_export/"
+EXPORT_DIR = "/data/2901_atlas_export_rgbd/"
 
 
 if __name__ == "__main__":
@@ -30,6 +30,9 @@ if __name__ == "__main__":
     set_log_level("info")
 
     annotations = pd.read_csv("../annotations_processed.csv", parse_dates=["Start", "End"],
+                              usecols=["Trial", "filekey", "Phase", "Start", "End"],
+                              dtype={"Trial": str, "filekey": str, "Phase": str, "Start": str,
+                                     "End": str},
                               infer_datetime_format=True)
 
     for i, trial in annotations.iterrows():
@@ -41,7 +44,7 @@ if __name__ == "__main__":
         phase = trial["Phase"]
         trial_path = os.path.join(INPUT_DIR, recording_dir, "recordings")
         export_path = os.path.join(EXPORT_DIR, recording_dir, trial["Phase"])
-        recording_name = "recordings_" + recording_dir[4:6] + recording_dir[2:4] + "_recording_" + trial["filekey"]
+        recording_name = "recordings_" + recording_dir[4:6] + recording_dir[2:4] + "_recording_" + str(trial["filekey"])
         dir_path = os.path.join(trial_path, recording_name)
         if "blooper" in trial["Phase"]:
             continue
@@ -49,7 +52,7 @@ if __name__ == "__main__":
             logging.warning(f"Skipping recording {export_path}, it exists .. continuing")
             continue
         if not os.path.exists(dir_path):
-            logging.warning(f"Skipping recording {export_path}, dir path not found.")
+            logging.warning(f"Skipping recording {dir_path}, dir path not found.")
             continue
 
         start = pd.Timestamp(trial["Start"])
@@ -62,6 +65,7 @@ if __name__ == "__main__":
 
         export_config = ExportConfig()
         export_config.export_color = True
+        export_config.export_rgbd = True
         export_config.timesync = True
         # only export 1FPS
         export_config.skip_frames = 5

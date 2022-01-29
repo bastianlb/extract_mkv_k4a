@@ -161,6 +161,7 @@ namespace extract_mkv {
           m_frame_map_lock.unlock();
         }
 
+        spdlog::debug("Recieved frame timestamp {0}.. resetting frame count", mean_timestamp.count());
         for (auto feed : m_input_feeds) {
           // reset frame count, we received a frame.
           feed->m_missing_frame_count = 0;
@@ -205,7 +206,7 @@ namespace extract_mkv {
     feed->m_frame_counter = m_frames_exported;
     bool ts_exported = false;
     // create wrappers to get transformation / calibration handles
-    microseconds image_timestamp;
+    microseconds image_timestamp{0};
     // note: lifecycle is not managed by this function. They are stored and cleaned up later.
     feed->m_processed_data->feed_name = feed->m_feed_name;
     if (m_export_config.process_color()) {
@@ -233,6 +234,7 @@ namespace extract_mkv {
     } else {
       spdlog::error("Color or depth must be exported, or no time information is present!");
       feed->m_missing_frame_count++;
+      feed->m_last_depth_ts = microseconds(0);
     }
 
     if (feed->m_missing_frame_count > 100) {
@@ -551,7 +553,7 @@ namespace extract_mkv {
     uint8 bits_per_element = 16;
     MkvDataBlock2 block;
     if(!m_loader->getNextDataBlock(block, DEPTH_TRACK_KEY)) {
-      spdlog::error("Unable to get next color block {0}..", m_frame_counter);
+      spdlog::error("Unable to get next depth block {0}..", m_frame_counter);
       return false;
     }
     int width;
