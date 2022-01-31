@@ -9,7 +9,7 @@ RUNTIME_ARGS = --runtime nvidia --privileged --network host --gpus all -e DISPLA
 		-v /dev/bus/usb:/dev/bus/usb -v /etc/localtime:/etc/localtime:ro \
 		-v /data/develop/extract_mkv_pcpd/scripts:/deploy \
 		-v /data/datasets/atlas_export:/data/export/ \
-    -e NVIDIA_DRIVER_CAPABILITIES=compute,utility,video \
+		-e NVIDIA_DRIVER_CAPABILITIES=compute,utility,video \
 		--device /dev/nvidia0:/dev/nvidia0 --device /dev/nvidia0:/dev/nvidia0 --device /dev/nvidiactl:/dev/nvidiactl \
 		-v ${VOLUME}:/data/input
 
@@ -31,12 +31,14 @@ docker-base:
 	DOCKER_BUILDKIT=1 docker build \
 		-f docker/base/Dockerfile \
 		-t ${DOCKER_IMAGE}_base --ssh github=/artekmed/config/credentials/id_rsa \
+		--build-arg registry=${REGISTRY} \
 		--no-cache .
 	# --no-cache .
 
 docker-extract:
 	DOCKER_BUILDKIT=1 docker build \
 		-f docker/run/Dockerfile \
+		--build-arg registry=${REGISTRY} \
 		-t ${DOCKER_IMAGE} .
 
 docker-start:

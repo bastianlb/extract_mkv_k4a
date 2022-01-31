@@ -17,6 +17,7 @@
 
 
 namespace extract_mkv {
+    std::mutex OPENGL_CONTEXT_LOCK;
 
     K4AFrameExtractor::K4AFrameExtractor(std::string input_filename, std::string output_directory, 
             std::string feed_name, ExportConfig export_config) :
@@ -343,7 +344,9 @@ namespace extract_mkv {
             throw MissingDataException();
         }
 
+        OPENGL_CONTEXT_LOCK.lock();
         k4a_transformation_t transformation = k4a_transformation_create(&device_wrapper->calibration);
+        OPENGL_CONTEXT_LOCK.unlock();
         if (transformation == nullptr || K4A_RESULT_SUCCEEDED !=
                 k4a_transformation_depth_image_to_color_camera(transformation, input_depth_image.handle(),
                                                                transformed_depth_image))
@@ -368,18 +371,20 @@ namespace extract_mkv {
         // undistort using color image rectify maps?
         cv::remap(image_buffer, undistorted_image, device_wrapper->rectify_maps.color_map_x,
                   device_wrapper->rectify_maps.color_map_y, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
+        k4a_image_release(transformed_depth_image);
+        OPENGL_CONTEXT_LOCK.lock();
+        k4a_transformation_destroy(transformation);
+        OPENGL_CONTEXT_LOCK.unlock();
 
         cv::Mat out_image;
         //undistorted_image.copyTo(out_image);
         // TODO: generalize this into configs
-        cv::resize(undistorted_image, out_image, cv::Size(512, 384));
-        cv::imwrite(image_path, out_image);
+        //cv::resize(undistorted_image, out_image, cv::Size(512, 384));
+        cv::imwrite(image_path, undistorted_image);
         std::ostringstream s;
         s << std::setw(10) << std::setfill('0') << frame_counter << "_distorted_rgbd.tiff";
         image_path = output_directory / s.str();
         // cv::imwrite(image_path, image_buffer);
-        k4a_image_release(transformed_depth_image);
-        k4a_transformation_destroy(transformation);
     };
 
     void process_pointcloud(k4a::image input_color_image,

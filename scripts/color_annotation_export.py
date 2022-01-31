@@ -10,7 +10,8 @@ from mkv_extractor import TimesynchronizerPCPD, ExportConfig, Path as MkvPath
 # "/atlasarchive/atlas/03_animal_trials/210824_animal_trial_02/"
 
 # INPUT_DIR = "/data/input"
-INPUT_DIR = "/media/narvis/Elements/03_animal_trials/"
+# INPUT_DIR = "/media/narvis/Elements/03_animal_trials/"
+INPUT_DIR = "/artekmed/recordings/03_animal_trials/"
 EXPORT_DIR = "/data/2901_atlas_export_rgbd/"
 
 

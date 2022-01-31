@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1.0.0-experimental
-ARG from=artekmedregistry.campar.in.tum.de/export_mkv_base
+ARG registry=artekmedregistry.campar.in.tum.de
+ARG from=${registry}/export_mkv_base
 FROM ${from} as extract_mkv_run
 
 WORKDIR /extract_mkv/

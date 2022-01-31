@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1.0.0-experimental
-ARG from=artekmedregistry.campar.in.tum.de/artekmed_cn_base:v0.3-cuda11
+ARG registry=artekmedregistry.campar.in.tum.de
+ARG from=${registry}/artekmed_cn_base:v0.3-cuda11
 FROM ${from} as pcpd_base
 
 WORKDIR /pcpd
@@ -7,6 +8,7 @@ WORKDIR /pcpd
 # ignore failed exit code due to unsigned package
 RUN apt update || :
 RUN apt-get install -y libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libavresample-dev libva-dev libvdpau-dev
+RUN python3 -m pip install conan --upgrade
 
 # TODO: --mount=type=cache can avoid cache bust? does it work with ssh?
 # https://stackoverflow.com/questions/55003297/how-to-get-git-clone-to-play-nice-with-docker-cache

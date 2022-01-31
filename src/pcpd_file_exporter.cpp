@@ -274,14 +274,6 @@ namespace extract_mkv {
                       frame_id);
     }
 
-    if (m_export_config.export_rgbd) {
-      process_rgbd(k4a_wrapper->capture_handle.get_depth_image(),
-                   feed->m_color_image_width, feed->m_color_image_height,
-                   feed->m_device_wrapper,
-                   feed->get_output_dir(),
-                   frame_id);
-    }
-
     cv::Mat color_image;
     if (m_export_config.process_color()) {
       if (data->color_image.empty()) {
@@ -336,8 +328,13 @@ namespace extract_mkv {
                  frame_id);
     }
 
-    // TODO: for some reason depth gets corrupted by color image download.
-    // currently can't process pointcloud
+    if (m_export_config.export_rgbd) {
+      process_rgbd(k4a_wrapper->capture_handle.get_depth_image(),
+                   512, 384,
+                   feed->m_device_wrapper,
+                   feed->get_output_dir(),
+                   frame_id);
+    }
 
     if (m_export_config.export_pointcloud) {
       process_pointcloud(k4a_wrapper->capture_handle.get_color_image(),
