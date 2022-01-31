@@ -63,6 +63,7 @@ namespace extract_mkv {
       pcpd::datatypes::PixelFormatType m_color_pixel_format{pcpd::datatypes::PixelFormatType::BGRA};
       std::unique_ptr<ProcessedData> m_processed_data;
       std::atomic<uint64_t> m_frame_counter{1};
+      K4ATransformationContext m_transformation;
 
     protected:
       MkvTrackLoaderConfig m_trackloader_config{};

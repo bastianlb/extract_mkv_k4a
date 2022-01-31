@@ -15,6 +15,10 @@
 #include "extract_mkv/filesystem.h"
 #include "extract_mkv/transformation_helpers.h"
 
+typedef std::chrono::high_resolution_clock::time_point TimeVar;
+#define duration(a) std::chrono::duration_cast<std::chrono::nanoseconds>(a).count() / (1000 * 1000)
+#define timeNow() std::chrono::high_resolution_clock::now()
+
 
 namespace extract_mkv {
     std::mutex OPENGL_CONTEXT_LOCK;
@@ -185,8 +189,10 @@ namespace extract_mkv {
             }
 
             if (m_export_config.export_rgbd && input_depth_image.is_valid() && input_color_image.is_valid()) {
+                /*
                 process_rgbd(input_depth_image, input_color_image.get_width_pixels(),
                              input_color_image.get_height_pixels(), wrapper, m_output_directory, frame_counter);
+                */
             }
 
             if (m_export_config.export_pointcloud && input_depth_image.is_valid() && input_color_image.is_valid()) {
@@ -323,7 +329,15 @@ namespace extract_mkv {
         return timestamp;
     }
 
-    void process_rgbd(k4a::image input_depth_image,
+    void K4ATransformationContext::init_transformation(k4a::calibration calib) {
+        OPENGL_CONTEXT_LOCK.lock();
+        // TODO: could update the camera matrix here, but might be tricky
+        // due to the indexing kinect is using..
+        m_transformation = k4a_transformation_create(&calib);
+        OPENGL_CONTEXT_LOCK.unlock();
+    }
+
+    void K4ATransformationContext::process_rgbd(k4a::image input_depth_image,
                       int color_image_width_pixels, int color_image_height_pixels,
                       std::shared_ptr<K4ADeviceWrapper> device_wrapper,
                       fs::path output_directory, int frame_counter) {
@@ -332,49 +346,32 @@ namespace extract_mkv {
             spdlog::warn("Export RGBD requires a valid depth image.");
             throw MissingDataException();
         }
-        k4a_image_t transformed_depth_image;
-        if (K4A_RESULT_SUCCEEDED != k4a_image_create(K4A_IMAGE_FORMAT_DEPTH16,
-                                                     color_image_width_pixels,
-                                                     color_image_height_pixels,
-                                                     color_image_width_pixels * (u_int16_t)sizeof(uint16_t),
-                                                     &transformed_depth_image))
-        {
-            spdlog::error("Failed to create transformed color image");
-            k4a_image_release(transformed_depth_image);
-            throw MissingDataException();
-        }
+        k4a::image transformed_depth_image = k4a::image::create(K4A_IMAGE_FORMAT_DEPTH16,
+                                                                color_image_width_pixels,
+                                                                color_image_height_pixels,
+                                                                color_image_width_pixels * (u_int16_t)sizeof(uint16_t));
 
-        OPENGL_CONTEXT_LOCK.lock();
-        k4a_transformation_t transformation = k4a_transformation_create(&device_wrapper->calibration);
-        OPENGL_CONTEXT_LOCK.unlock();
-        if (transformation == nullptr || K4A_RESULT_SUCCEEDED !=
-                k4a_transformation_depth_image_to_color_camera(transformation, input_depth_image.handle(),
-                                                               transformed_depth_image))
-        {
-            spdlog::error("Failed to compute transformed depth image");
-            k4a_image_release(transformed_depth_image);
-            k4a_transformation_destroy(transformation);
-            throw MissingDataException();
+        m_transformation.depth_image_to_color_camera(input_depth_image, &transformed_depth_image);
+        if (!(transformed_depth_image.is_valid())) {
+            spdlog::warn("Failed to transform RGBD image.");
         }
         std::ostringstream ss;
         ss << std::setw(10) << std::setfill('0') << frame_counter << "_rgbd.tiff";
         fs::path image_path = output_directory / ss.str();
         cv::Mat image_buffer = cv::Mat(cv::Size(color_image_width_pixels, color_image_height_pixels), CV_16UC1,
-                                       const_cast<void *>(static_cast<const void *>(k4a_image_get_buffer(transformed_depth_image))),
-                                       static_cast<size_t>(k4a_image_get_stride_bytes(transformed_depth_image)));
+                                       const_cast<void *>(static_cast<const void *>(k4a_image_get_buffer(transformed_depth_image.handle()))),
+                                       static_cast<size_t>(k4a_image_get_stride_bytes(transformed_depth_image.handle())));
+        /*
         double minVal;
         double maxVal;
 
         cv::minMaxLoc(image_buffer, &minVal, &maxVal);
         spdlog::debug("RGBD min: {0}, max: {1}", minVal, maxVal);
+        */
         cv::Mat undistorted_image;
         // undistort using color image rectify maps?
         cv::remap(image_buffer, undistorted_image, device_wrapper->rectify_maps.color_map_x,
                   device_wrapper->rectify_maps.color_map_y, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
-        k4a_image_release(transformed_depth_image);
-        OPENGL_CONTEXT_LOCK.lock();
-        k4a_transformation_destroy(transformation);
-        OPENGL_CONTEXT_LOCK.unlock();
 
         cv::Mat out_image;
         //undistorted_image.copyTo(out_image);

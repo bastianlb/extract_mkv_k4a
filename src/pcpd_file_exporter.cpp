@@ -329,11 +329,13 @@ namespace extract_mkv {
     }
 
     if (m_export_config.export_rgbd) {
-      process_rgbd(k4a_wrapper->capture_handle.get_depth_image(),
-                   512, 384,
-                   feed->m_device_wrapper,
-                   feed->get_output_dir(),
-                   frame_id);
+      feed->m_transformation.process_rgbd(
+          k4a_wrapper->capture_handle.get_depth_image(),
+          feed->m_color_image_width, feed->m_color_image_height,
+          feed->m_device_wrapper,
+          feed->get_output_dir(),
+          frame_id
+      );
     }
 
     if (m_export_config.export_pointcloud) {
@@ -462,6 +464,7 @@ namespace extract_mkv {
     // NOTE: recording fps not configurable right now
     initialize();
     //print_raw_calibration(m_calibration);
+    m_transformation.init_transformation(m_calibration);
   }
 
   void PCPDFileChannel::load_mkv_info(std::string fp) {
