@@ -61,6 +61,7 @@ namespace extract_mkv {
       uint16_t m_depth_image_width{640};
       uint16_t m_depth_image_height{576};
       pcpd::datatypes::PixelFormatType m_color_pixel_format{pcpd::datatypes::PixelFormatType::BGRA};
+      void write_rigid_transform(pcpd::datatypes::RigidTransform&);
       std::unique_ptr<ProcessedData> m_processed_data;
       std::atomic<uint64_t> m_frame_counter{1};
       K4ATransformationContext m_transformation;
@@ -76,6 +77,7 @@ namespace extract_mkv {
       fs::path m_input_dir;
       fs::path m_output_dir;
       k4a::calibration m_calibration;
+      Eigen::Matrix4f m_extrinsics;
   };
 
   class TimesynchronizerPCPD : public TimesynchronizerBase {

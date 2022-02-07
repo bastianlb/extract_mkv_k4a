@@ -41,6 +41,9 @@ if __name__ == "__main__":
         if recording_dir not in os.listdir(INPUT_DIR):
             logging.info("Trial not found: " + recording_dir)
             continue
+        if "trial_09" not in recording_dir:
+            logging.info("Skipping trial, export only 09: " + recording_dir)
+            continue
 
         phase = trial["Phase"]
         trial_path = os.path.join(INPUT_DIR, recording_dir, "recordings")

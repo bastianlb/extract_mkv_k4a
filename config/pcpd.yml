@@ -1,22 +1,22 @@
 mode: PCPD
 record:
-  start_ts: 1632804955682321998
-  end_ts: 1632805075983893801
-  skip_frames: 5
-    # max_frame_count: 100
+  # start_ts: 1632804955682321998
+  # end_ts: 1632805075983893801
+  skip_frames: 1
+  max_frame_count: 20
   input_dir: "/media/storage/atlas_recordings/recordings_2809_recording_2"
   feeds:
     - "cn01/"
-    - "cn02/"
-    - "cn03/"
-    - "cn04/"
+      # - "cn02/"
+      # - "cn03/"
+      # - "cn04/"
   output:
-    # - timestamp
-    - color
+    - timestamp
+    # - color
     # - color_video
       # - depth
     # - infrared
-    - rgbd
+    # - rgbd
     # - pointcloud
     # - align_clouds
     # - bodypose

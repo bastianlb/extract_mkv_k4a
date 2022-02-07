@@ -376,8 +376,8 @@ namespace extract_mkv {
         cv::Mat out_image;
         //undistorted_image.copyTo(out_image);
         // TODO: generalize this into configs
-        //cv::resize(undistorted_image, out_image, cv::Size(512, 384));
-        cv::imwrite(image_path, undistorted_image);
+        cv::resize(undistorted_image, out_image, cv::Size(512, 384));
+        cv::imwrite(image_path, out_image);
         std::ostringstream s;
         s << std::setw(10) << std::setfill('0') << frame_counter << "_distorted_rgbd.tiff";
         image_path = output_directory / s.str();
