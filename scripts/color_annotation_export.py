@@ -11,8 +11,8 @@ from mkv_extractor import TimesynchronizerPCPD, ExportConfig, Path as MkvPath
 
 # INPUT_DIR = "/data/input"
 # INPUT_DIR = "/media/narvis/Elements/03_animal_trials/"
-INPUT_DIR = "/artekmed/recordings/03_animal_trials/"
-EXPORT_DIR = "/data/2901_atlas_export_rgbd/"
+INPUT_DIR = "/media/narvis/atlas_4/03_animal_trials/"
+EXPORT_DIR = "/data/0802_atlas_export_rgbdi/"
 
 
 if __name__ == "__main__":
@@ -30,7 +30,7 @@ if __name__ == "__main__":
 
     set_log_level("info")
 
-    annotations = pd.read_csv("../annotations_processed.csv", parse_dates=["Start", "End"],
+    annotations = pd.read_csv("../annotations_trial_1-6.csv", parse_dates=["Start", "End"],
                               usecols=["Trial", "filekey", "Phase", "Start", "End"],
                               dtype={"Trial": str, "filekey": str, "Phase": str, "Start": str,
                                      "End": str},
@@ -40,9 +40,6 @@ if __name__ == "__main__":
         recording_dir = trial["Trial"]
         if recording_dir not in os.listdir(INPUT_DIR):
             logging.info("Trial not found: " + recording_dir)
-            continue
-        if "trial_09" not in recording_dir:
-            logging.info("Skipping trial, export only 09: " + recording_dir)
             continue
 
         phase = trial["Phase"]
@@ -63,13 +60,15 @@ if __name__ == "__main__":
         end = pd.Timestamp(trial["End"])
         phase = trial["Phase"]
 
-        if (end - start) > timedelta(minutes=10):
+        if (end - start) > timedelta(minutes=15):
             # use only the first 10 minutes right now, don't export forever
-            end = start + timedelta(minutes=10)
+            end = start + timedelta(minutes=15)
 
         export_config = ExportConfig()
         export_config.export_color = True
         export_config.export_rgbd = True
+        export_config.export_infrared = True
+        export_config.export_depth = True
         export_config.timesync = True
         # only export 1FPS
         export_config.skip_frames = 5

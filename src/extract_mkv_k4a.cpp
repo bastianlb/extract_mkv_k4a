@@ -239,13 +239,14 @@ namespace extract_mkv {
                 cv::Mat image_buffer = cv::Mat(cv::Size(w, h), CV_16UC1,
                                                const_cast<void *>(static_cast<const void *>(input_depth_image.get_buffer())),
                                                static_cast<size_t>(input_depth_image.get_stride_bytes()));
-                cv::Mat undistorted_image;
+                cv::Mat undistorted_image, out_image;
                 cv::remap(image_buffer, undistorted_image, device_wrapper->rectify_maps.depth_map_x,
                           device_wrapper->rectify_maps.depth_map_y, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
                 std::ostringstream ss;
                 ss << std::setw(10) << std::setfill('0') << frame_counter << "_depth.tiff";
                 std::string image_path = output_directory / ss.str();
-                cv::imwrite(image_path, undistorted_image);
+                cv::resize(undistorted_image, out_image, cv::Size(512, 460));
+                cv::imwrite(image_path, out_image);
                 std::ostringstream s;
                 s << std::setw(10) << std::setfill('0') << frame_counter << "_distorted_depth.tiff";
                 image_path = output_directory / s.str();
@@ -374,10 +375,11 @@ namespace extract_mkv {
                   device_wrapper->rectify_maps.color_map_y, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
 
         cv::Mat out_image;
-        //undistorted_image.copyTo(out_image);
         // TODO: generalize this into configs
         cv::resize(undistorted_image, out_image, cv::Size(512, 384));
         cv::imwrite(image_path, out_image);
+        //undistorted_image.copyTo(out_image);
+        // cv::resize(undistorted_image, out_image, cv::Size(512, 384));
         std::ostringstream s;
         s << std::setw(10) << std::setfill('0') << frame_counter << "_distorted_rgbd.tiff";
         image_path = output_directory / s.str();
@@ -520,8 +522,13 @@ namespace extract_mkv {
                     std::ostringstream ss;
                     ss << std::setw(10) << std::setfill('0') << frame_counter << "_ir.tiff";
                     fs::path image_path = output_directory / ss.str();
-                    cv::normalize(image_buffer, image_buffer, 0, 255, cv::NORM_MINMAX);
-                    cv::imwrite(image_path, image_buffer);
+                    // cv::normalize(image_buffer, image_buffer, 0, 255, cv::NORM_MINMAX);
+                    // images are 640x576
+                    cv::Mat undistorted_image, out_image;
+                    cv::remap(image_buffer, undistorted_image, device_wrapper->rectify_maps.depth_map_x,
+                              device_wrapper->rectify_maps.depth_map_y, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
+                    cv::resize(undistorted_image, out_image, cv::Size(512, 460));
+                    cv::imwrite(image_path, out_image);
 
                 } else {
                     spdlog::warn("Received infrared frame with unexpected format: {0}",

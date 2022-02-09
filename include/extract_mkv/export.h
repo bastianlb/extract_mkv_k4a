@@ -23,7 +23,6 @@ namespace extract_mkv {
         spdlog::debug("Writing color image..");
         ss << std::setw(10) << std::setfill('0') << frame_counter << "_color.jpg";
         fs::path image_path = output_directory / ss.str();
-        //cv::resize(undistorted_image, out_image, cv::Size(512, 384));
         cv::imwrite(image_path, out_image, compression_params);
         return 0;
     }
