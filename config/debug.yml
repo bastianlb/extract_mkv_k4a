@@ -5,18 +5,18 @@ record:
   input_dir: "/media/storage/recording_20201207_BodyTracking_3Person_Table/"
   feeds:
     - "cn01/capture.mkv"
-      # - "cn02/capture.mkv"
-      # - "cn03/capture.mkv"
-      # - "cn04/capture.mkv"
+    - "cn02/capture.mkv"
+    - "cn03/capture.mkv"
+    - "cn04/capture.mkv"
   output:
-    # - timestamp
-    - depth
+    - timestamp
+      # - depth
     - color
       # - infrared
-    - rgbd
+      # - rgbd
     - pointcloud
       # - align_clouds
       # - bodypose
-  output_dir: "../debug_output"
+  output_dir: "/media/storage/debug_output/"
 timesync: true
 seek: false

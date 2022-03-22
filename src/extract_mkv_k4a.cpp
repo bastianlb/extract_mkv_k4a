@@ -171,9 +171,10 @@ namespace extract_mkv {
             const k4a::image input_color_image = m_capture.get_color_image();
             const k4a::image input_ir_image = m_capture.get_ir_image();
             m_worker_lock.unlock();
-            std::shared_ptr<K4ADeviceWrapper> wrapper;
+            auto wrapper = std::make_shared<K4ADeviceWrapper>();
             wrapper->rectify_maps = m_rectify_maps;
             wrapper->calibration = m_calibration;
+            wrapper->m_extrinsics = m_extrinsics;
             spdlog::info("Processing {0} : {1}", m_name, frame_counter);
             record_timestamps(input_color_image, input_depth_image, frame_counter);
             if (m_export_config.export_depth && input_depth_image.is_valid()) {
@@ -478,13 +479,11 @@ namespace extract_mkv {
         // TODO: use PCL? remove null points?
         spdlog::trace("Exporting pointcloud.");
         std::vector<color_point_t> points = image_to_pointcloud(point_cloud_image, transformed_color_image);
-        /*
-        TODO: not currently in framework
         if (align_clouds) {
             for (auto &point : points) {
-                point.xyz = device_wrapper->world2camera * point.xyz;
+                point.xyz = device_wrapper->m_extrinsics * point.xyz;
             }
-        }*/
+        }
 
         std::ostringstream ss;
         ss << std::setw(4) << std::setfill('0') << frame_counter << "_pointcloud.ply";

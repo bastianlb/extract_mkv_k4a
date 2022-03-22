@@ -510,8 +510,8 @@ namespace extract_mkv {
     spdlog::info("Got extrinsics.. {0}", device_calibration.camera_pose);
     Eigen::Matrix4f extrinsics_gl;
     device_calibration.camera_pose.toMatrix4f(extrinsics_gl);
-    opengl_to_opencv_transform(extrinsics_gl, m_extrinsics);
-    write_rigid_transform(device_calibration.camera_pose);
+    // opengl_to_opencv_transform(extrinsics_gl, m_extrinsics);
+    write_rigid_transform(extrinsics_gl);
   }
 
   void PCPDFileChannel::write_rigid_transform(pcpd::datatypes::RigidTransform& transform) {
@@ -528,6 +528,28 @@ namespace extract_mkv {
     root["translation"]["m00"] = transform.translation[0];
     root["translation"]["m10"] = transform.translation[1];
     root["translation"]["m20"] = transform.translation[2];
+    std::string document = Json::writeString(wbuilder, root);
+    file_id.open(filename.c_str(), std::ios::out);
+    file_id << document << std::endl;
+    file_id.close();
+  }
+
+  void PCPDFileChannel::write_rigid_transform(Eigen::Matrix4f& transform) {
+    Eigen::Matrix3f rot_mat = transform.block<3,3>(0,0);
+    Eigen::Quaternionf rot(rot_mat);
+    Eigen::Vector3f trans = transform.block<1, 3>(0, 0);
+    std::ofstream file_id;
+    fs::path filename = fs::path(m_output_dir) / "world2camera.json";
+    Json::StreamWriterBuilder wbuilder;
+    wbuilder["indentation"] = "\t";
+    Json::Value root;   // will contains the root value after parsing.
+    root["rotation"]["w"] = rot.w();
+    root["rotation"]["x"] = rot.x();
+    root["rotation"]["y"] = rot.y();
+    root["rotation"]["z"] = rot.z();
+    root["translation"]["m00"] = trans[0];
+    root["translation"]["m10"] = trans[1];
+    root["translation"]["m20"] = trans[2];
     std::string document = Json::writeString(wbuilder, root);
     file_id.open(filename.c_str(), std::ios::out);
     file_id << document << std::endl;

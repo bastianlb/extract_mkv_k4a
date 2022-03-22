@@ -6,3 +6,4 @@ cmake/*
 tmp/
 .ccls-cache/
 test_system/
+./.ipynb_checkpoints/*
