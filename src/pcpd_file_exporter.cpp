@@ -510,8 +510,8 @@ namespace extract_mkv {
     spdlog::info("Got extrinsics.. {0}", device_calibration.camera_pose);
     Eigen::Matrix4f extrinsics_gl;
     device_calibration.camera_pose.toMatrix4f(extrinsics_gl);
-    // opengl_to_opencv_transform(extrinsics_gl, m_extrinsics);
-    write_rigid_transform(extrinsics_gl);
+    write_rigid_transform(device_calibration.camera_pose);
+    opengl_to_opencv_transform(extrinsics_gl, m_extrinsics);
   }
 
   void PCPDFileChannel::write_rigid_transform(pcpd::datatypes::RigidTransform& transform) {
