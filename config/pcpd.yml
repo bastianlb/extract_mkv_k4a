@@ -3,8 +3,8 @@ record:
   # start_ts: 1632804955682321998
   # end_ts: 1632805075983893801
   skip_frames: 1
-  max_frame_count: 20
-  input_dir: "/media/storage/atlas_recordings/recordings_2809_recording_2"
+  max_frame_count: 50
+  input_dir: "/media/narvis/atlas_4/03_animal_trials/211102_animal_trial_08/recordings/recordings_0211_recording_01/"
   feeds:
     - "cn01/"
     - "cn02/"
@@ -20,6 +20,6 @@ record:
     - pointcloud
     # - align_clouds
     # - bodypose
-  output_dir: "/media/storage/atlas_export/"
-timesync: false
+  output_dir: "/data/atlas_export/"
+timesync: true
 seek: false

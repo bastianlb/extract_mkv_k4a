@@ -40,6 +40,7 @@ namespace extract_mkv {
         // store calibration
         print_raw_calibration(m_calibration);
         m_rectify_maps = process_calibration(m_calibration, m_output_directory);
+        m_transformation.init_transformation(m_calibration);
 
         if (export_config.export_pointcloud) {
             spdlog::debug("Set color conversion to BGRA32 for pointcloud export");
@@ -190,14 +191,14 @@ namespace extract_mkv {
             }
 
             if (m_export_config.export_rgbd && input_depth_image.is_valid() && input_color_image.is_valid()) {
-                /*
-                process_rgbd(input_depth_image, input_color_image.get_width_pixels(),
-                             input_color_image.get_height_pixels(), wrapper, m_output_directory, frame_counter);
-                */
+                m_transformation.process_rgbd(
+                    input_depth_image, input_color_image.get_width_pixels(),
+                    input_color_image.get_height_pixels(), wrapper, m_output_directory, frame_counter
+                );
             }
 
             if (m_export_config.export_pointcloud && input_depth_image.is_valid() && input_color_image.is_valid()) {
-                process_pointcloud(input_color_image, input_depth_image, wrapper, m_output_directory, frame_counter);
+                m_transformation.process_pointcloud(input_color_image, input_depth_image, wrapper, m_output_directory, frame_counter);
             }
 
             if (m_export_config.export_bodypose && input_depth_image.is_valid() && input_ir_image.is_valid()) {
@@ -253,7 +254,7 @@ namespace extract_mkv {
                 image_path = output_directory / s.str();
                 cv::Mat image;
                 image_buffer.convertTo(image, CV_8UC1);
-                //cv::imwrite(image_path, image);
+                cv::imwrite(image_path, image);
             } else {
                 spdlog::warn("Received depth frame with unexpected format: {0}", input_depth_image.get_format());
                 throw MissingDataException();
@@ -371,23 +372,22 @@ namespace extract_mkv {
         spdlog::debug("RGBD min: {0}, max: {1}", minVal, maxVal);
         */
         cv::Mat undistorted_image;
-        // undistort using color image rectify maps?
-        cv::remap(image_buffer, undistorted_image, device_wrapper->rectify_maps.color_map_x,
+        // undistort using color image rectify maps
+        /*cv::remap(image_buffer, undistorted_image, device_wrapper->rectify_maps.color_map_x,
                   device_wrapper->rectify_maps.color_map_y, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
+        */
 
-        cv::Mat out_image;
         // TODO: generalize this into configs
-        cv::resize(undistorted_image, out_image, cv::Size(512, 384));
-        cv::imwrite(image_path, out_image);
-        //undistorted_image.copyTo(out_image);
+        // cv::resize(undistorted_image, out_image, cv::Size(512, 384));
+        // cv::imwrite(image_path, undistorted_image);
         // cv::resize(undistorted_image, out_image, cv::Size(512, 384));
         std::ostringstream s;
         s << std::setw(10) << std::setfill('0') << frame_counter << "_distorted_rgbd.tiff";
         image_path = output_directory / s.str();
-        // cv::imwrite(image_path, image_buffer);
+        cv::imwrite(image_path, image_buffer);
     };
 
-    void process_pointcloud(k4a::image input_color_image,
+    void K4ATransformationContext::process_pointcloud(k4a::image input_color_image,
                             k4a::image input_depth_image,
                             std::shared_ptr<K4ADeviceWrapper> device_wrapper,
                             fs::path output_directory,
@@ -397,12 +397,17 @@ namespace extract_mkv {
         spdlog::trace("In process pointcloud");
         int color_image_width_pixels = input_color_image.get_width_pixels();
         int color_image_height_pixels = input_color_image.get_height_pixels();
+        spdlog::trace("color image: {0}, {1}", color_image_width_pixels, color_image_height_pixels);
 
         // transform color image into depth camera geometry
         int depth_image_width_pixels = input_depth_image.get_width_pixels();
         int depth_image_height_pixels = input_depth_image.get_height_pixels();
-        k4a_image_t transformed_color_image = NULL;
+        spdlog::trace("depth image: {0}, {1}", depth_image_width_pixels, depth_image_height_pixels);
         k4a::image color_image;
+        k4a::image transformed_color_image = k4a::image::create(K4A_IMAGE_FORMAT_COLOR_BGRA32,
+                                                                depth_image_width_pixels,
+                                                                depth_image_height_pixels,
+                                                                depth_image_width_pixels * 4 * (int)sizeof(uint8_t));
         cv::Mat result;
         spdlog::trace("Done initializing pointcloud");
 
@@ -417,6 +422,7 @@ namespace extract_mkv {
             cv::Mat image_buffer = cv::imdecode(rawData, -cv::IMREAD_COLOR);
 
             cv::cvtColor(image_buffer, result, cv::COLOR_BGR2BGRA);
+            spdlog::trace("Create color image");
             color_image = k4a::image::create_from_buffer(K4A_IMAGE_FORMAT_COLOR_BGRA32,
                                                          color_image_width_pixels,
                                                          color_image_height_pixels,
@@ -429,56 +435,30 @@ namespace extract_mkv {
             throw MissingDataException();
         }
 
-        if (K4A_RESULT_SUCCEEDED != k4a_image_create(K4A_IMAGE_FORMAT_COLOR_BGRA32,
-                                                     depth_image_width_pixels,
-                                                     depth_image_height_pixels,
-                                                     depth_image_width_pixels * 4 * (int)sizeof(uint8_t),
-                                                     &transformed_color_image))
-        {
-            spdlog::error("Failed to create transformed color image");
-            k4a_image_release(transformed_color_image);
+        spdlog::trace("Create transformed image");
+        m_transformation.color_image_to_depth_camera(input_depth_image, color_image, &transformed_color_image);
+        if (!(transformed_color_image.is_valid())) {
+            spdlog::warn("Failed to transform RGBD image.");
             throw MissingDataException();
         }
 
-        k4a_image_t point_cloud_image = NULL;
-        if (K4A_RESULT_SUCCEEDED != k4a_image_create(K4A_IMAGE_FORMAT_CUSTOM,
-                                                     depth_image_width_pixels,
-                                                     depth_image_height_pixels,
-                                                     depth_image_width_pixels * 3 * (int)sizeof(int16_t),
-                                                     &point_cloud_image))
-        {
+        spdlog::trace("Create pointcloud image");
+        k4a::image point_cloud_image = k4a::image::create(K4A_IMAGE_FORMAT_CUSTOM,
+                                                          depth_image_width_pixels,
+                                                          depth_image_height_pixels,
+                                                          depth_image_width_pixels * 3 * (int)sizeof(int16_t));
+
+        m_transformation.depth_image_to_point_cloud(input_depth_image,
+                                                    K4A_CALIBRATION_TYPE_DEPTH,
+                                                    &point_cloud_image);
+        if (!point_cloud_image.is_valid()) {
             spdlog::error("Failed to create point cloud image");
-            k4a_image_release(transformed_color_image);
-            k4a_image_release(point_cloud_image);
-            throw MissingDataException();
-        }
-
-        k4a_transformation_t transformation = k4a_transformation_create(&device_wrapper->calibration);
-        if (transformation == nullptr || K4A_RESULT_SUCCEEDED !=
-                k4a_transformation_color_image_to_depth_camera(transformation, input_depth_image.handle(), color_image.handle(), transformed_color_image))
-        {
-            spdlog::error("Failed to compute transformed color image");
-            k4a_image_release(transformed_color_image);
-            k4a_image_release(point_cloud_image);
-            k4a_transformation_destroy(transformation);
-            throw MissingDataException();
-        }
-
-        if (K4A_RESULT_SUCCEEDED != k4a_transformation_depth_image_to_point_cloud(transformation,
-                                                                                  input_depth_image.handle(),
-                                                                                  K4A_CALIBRATION_TYPE_DEPTH,
-                                                                                  point_cloud_image))
-        {
-            spdlog::error("Failed to compute point cloud");
-            k4a_image_release(transformed_color_image);
-            k4a_image_release(point_cloud_image);
-            k4a_transformation_destroy(transformation);
             throw MissingDataException();
         }
 
         // TODO: use PCL? remove null points?
         spdlog::trace("Exporting pointcloud.");
-        std::vector<color_point_t> points = image_to_pointcloud(point_cloud_image, transformed_color_image);
+        std::vector<color_point_t> points = image_to_pointcloud(point_cloud_image.handle(), transformed_color_image.handle());
         if (align_clouds) {
             for (auto &point : points) {
                 point.xyz = device_wrapper->m_extrinsics * point.xyz;
@@ -493,10 +473,6 @@ namespace extract_mkv {
         } else {
             tranformation_helpers_write_point_cloud(points, ply_path.c_str());
         }
-
-        k4a_image_release(transformed_color_image);
-        k4a_image_release(point_cloud_image);
-        k4a_transformation_destroy(transformation);
     }
 
     void process_ir(k4a::image input_ir_image,
