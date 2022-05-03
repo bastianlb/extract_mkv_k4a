@@ -183,7 +183,7 @@ namespace extract_mkv {
             }
 
             if (m_export_config.export_color && input_color_image.is_valid()) {
-                process_color(input_color_image, wrapper, m_output_directory, frame_counter);
+                process_color(input_color_image, wrapper, m_output_directory, frame_counter, m_export_config.export_distorted);
             }
 
             if (m_export_config.export_infrared && input_ir_image.is_valid()) {
@@ -265,7 +265,7 @@ namespace extract_mkv {
         }
     }
 
-    int process_color(k4a::image input_color_image, std::shared_ptr<K4ADeviceWrapper> device_wrapper, fs::path output_directory, int frame_counter) {
+    int process_color(k4a::image input_color_image, std::shared_ptr<K4ADeviceWrapper> device_wrapper, fs::path output_directory, int frame_counter, bool distort) {
         if (!input_color_image.is_valid()) {
             spdlog::warn("Color image invalid for {0}, frame {1}", output_directory, frame_counter);
             return -1;
@@ -279,11 +279,17 @@ namespace extract_mkv {
         cv::Mat image_buffer;
         uint timestamp = input_color_image.get_system_timestamp().count();
 
+
+        std::ostringstream s;
         std::ostringstream ss;
+        std::ostringstream sss;
 
         std::vector<int> compression_params;
         compression_params.push_back(cv::IMWRITE_JPEG_QUALITY);
         compression_params.push_back(95);
+
+        fs::path image_path;
+
 
         if (input_color_image.get_format() == K4A_IMAGE_FORMAT_COLOR_BGRA32) {
             cv::Mat image_buffer = cv::Mat(cv::Size(w, h), CV_8UC4,
@@ -293,15 +299,21 @@ namespace extract_mkv {
                       device_wrapper->rectify_maps.color_map_y, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
 
             spdlog::debug("Writing color image..");
-            ss << std::setw(10) << std::setfill('0') << frame_counter << "_color.jpg";
-            fs::path image_path = output_directory / ss.str();
-            cv::imwrite(image_path, undistorted_image, compression_params);
-            std::ostringstream s;
-            s << std::setw(10) << std::setfill('0') << frame_counter << "_distorted_color.jpg";
-            image_path = output_directory / s.str();
-            // cv::imwrite(image_path, image_buffer, compression_params);
+
+
+            if (distort) {
+                s << std::setw(10) << std::setfill('0') << frame_counter << "_distorted_color.jpg";
+                image_path = output_directory / s.str();
+                cv::imwrite(image_path, image_buffer, compression_params);
+            }
+            else {
+                ss << std::setw(10) << std::setfill('0') << frame_counter << "_color.jpg";
+                image_path = output_directory / ss.str();
+                cv::imwrite(image_path, undistorted_image, compression_params);
+            }
+
             cv::Mat diff;
-            std::ostringstream sss;
+
             cv::absdiff(image_buffer, undistorted_image, diff);
             sss << std::setw(10) << std::setfill('0') << frame_counter << "_diff_color.jpg";
             image_path = output_directory / sss.str();
@@ -317,13 +329,18 @@ namespace extract_mkv {
             }
             cv::remap(image_buffer, undistorted_image, device_wrapper->rectify_maps.color_map_x,
                       device_wrapper->rectify_maps.color_map_y, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
-            ss << std::setw(10) << std::setfill('0') << frame_counter << "_color.jpg";
-            fs::path image_path = output_directory / ss.str();
-            cv::imwrite(image_path, undistorted_image, compression_params);
-            std::ostringstream s;
-            s << std::setw(10) << std::setfill('0') << frame_counter << "_distored_color.jpg";
-            image_path = output_directory / s.str();
-            // cv::imwrite(image_path, image_buffer, compression_params);
+
+            if (distort) {
+                s << std::setw(10) << std::setfill('0') << frame_counter << "_distored_color.jpg";
+                image_path = output_directory / s.str();
+                cv::imwrite(image_path, image_buffer, compression_params);
+            }
+            else {
+                ss << std::setw(10) << std::setfill('0') << frame_counter << "_color.jpg";
+                fs::path image_path = output_directory / ss.str();
+                cv::imwrite(image_path, undistorted_image, compression_params);                
+            }
+
         } else {
             spdlog::warn("Received color frame with unexpected format: {0}",
                         input_color_image.get_format());

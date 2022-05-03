@@ -36,6 +36,7 @@ namespace extract_mkv {
       .def(py::init<>())
       .def_readwrite("export_timestamp", &ExportConfig::export_timestamp)
       .def_readwrite("export_color", &ExportConfig::export_color)
+      .def_readwrite("export_distorted", &ExportConfig::export_distorted)
       .def_readwrite("export_depth", &ExportConfig::export_depth)
       .def_readwrite("export_infrared", &ExportConfig::export_infrared)
       .def_readwrite("export_rgbd", &ExportConfig::export_rgbd)

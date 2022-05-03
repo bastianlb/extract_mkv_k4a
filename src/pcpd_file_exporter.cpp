@@ -323,7 +323,7 @@ namespace extract_mkv {
         process_color(k4a_wrapper->capture_handle.get_color_image(),
                       feed->m_device_wrapper,
                       feed->get_output_dir(),
-                      frame_id);
+                      frame_id, m_export_config.export_distorted);
     }
 
     if (m_export_config.export_infrared) {

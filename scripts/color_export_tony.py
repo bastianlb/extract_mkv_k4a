@@ -14,6 +14,7 @@ if __name__ == "__main__":
     export_config.export_color = True
     export_config.max_frames_exported = 10000
     export_config.skip_frames = 100
+    export_config.export_distorted = False
     # TODO: start end must be recording dependent...
     #                        1628650257725706448
     #export_config.start_ts = timedelta(microseconds=1628651055148343000 // 1000)
@@ -21,8 +22,7 @@ if __name__ == "__main__":
     #                        1628658895596854977
 
     export_config.start_ts = timedelta(seconds=1635838753)
-    export_config.end_ts = timedelta(seconds=1635838933)
-
+    export_config.end_ts = timedelta(seconds=1635838833)
 
     set_log_level("info")
 

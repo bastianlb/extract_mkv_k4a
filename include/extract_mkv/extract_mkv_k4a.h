@@ -65,7 +65,10 @@ namespace extract_mkv {
             std::chrono::microseconds m_timestamp_offset;
     };
     int process_depth(k4a::image, std::shared_ptr<K4ADeviceWrapper>, fs::path, int);
-    int process_color(k4a::image, std::shared_ptr<K4ADeviceWrapper>, fs::path, int);
+    /**
+     * bool indicates whether to export distorted or undistorted images 
+     */
+    int process_color(k4a::image, std::shared_ptr<K4ADeviceWrapper>, fs::path, int, bool);
     void process_ir(k4a::image, std::shared_ptr<K4ADeviceWrapper>, fs::path, int);
     void process_pose(std::shared_ptr<K4ADeviceWrapper>, fs::path, int);
     void compute_undistortion_intrinsics();

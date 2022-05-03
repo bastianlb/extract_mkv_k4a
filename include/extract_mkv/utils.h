@@ -30,6 +30,7 @@ namespace extract_mkv {
         bool export_extrinsics{false};
         bool export_bodypose{false};
         bool export_color_video{false};
+        bool export_distorted{false};
         bool timesync{true};
         uint64_t max_frames_exported{std::numeric_limits<std::uint64_t>::max()};
         nanoseconds start_ts{0};
@@ -57,6 +58,7 @@ namespace extract_mkv {
                 << "depth=" << c.export_depth << "\n"
                 << "IR=" << c.export_infrared << "\n"
                 << "RGBD=" << c.export_rgbd << "\n"
+                << "Distorted=" << c.export_distorted << "\n"
                 << "pointclouds=" << c.export_pointcloud << "\n"
                 << "align_clouds=" << c.align_clouds << "\n"
                 << "extrinsics=" << c.export_extrinsics << "\n"
