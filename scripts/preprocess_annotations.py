@@ -14,7 +14,7 @@ def custom_date_parser(date):
     except ValueError as e:
         logging.info("Invalid date format: ", date)
         raise e
-    assert(len(ms) == 3)
+    assert len(ms) == 3, date
     # put into ISO format
     date = date.replace(" ", "T")
     date = date.replace(",", ".")
@@ -57,10 +57,17 @@ if __name__ == "__main__":
             logging.info("Trial incomplete!")
             continue
 
-        # find region of overlap
+    # find region of overlap
     for i, trial in annotations.iterrows():
         if trial["Start"] >= trial["End"]:
             print("Trial bad formatting", trial)
+
+    def format(x):
+        if len(x) == 1:
+            return "0" + x
+        return x
+
+    annotations["filekey"] = annotations["filekey"].apply(format)
 
     # annotations.index = pd.IntervalIndex.from_arrays(annotations["Start"], annotations["End"])
     # annotations = annotations.drop(columns=["Start", "End"])
