@@ -5,6 +5,7 @@ import os
 import numpy as np
 import csv
 from tqdm import tqdm
+import re
 
 """
 This script checks whether mkv files contain MIDI Timecodes
@@ -30,6 +31,9 @@ def parse_args():
     )
     parser.add_argument(
         '--file_name', help='Name of the output file', type=str, default='midi_timecodes.csv'
+    )
+    parser.add_argument(
+        '--filter_output', help='Whether to filter the result', type=bool, default=True
     )
 
     args = parser.parse_args()
@@ -78,10 +82,27 @@ def create_output(files, data, output_dir, file_name):
     print("--- Finished writing the csv file in:", path)
 
     
-def get_mkv_files(input_dir, output_dir, file_name):
+def get_mkv_files(input_dir, output_dir, file_name, filter_output):
     # All mkv files in camera node 4
     files = sorted(glob(os.path.join(input_dir, '**/cn04/*.mkv'), recursive=True))
     files = list(filter(lambda file: 'calibrations' not in file.split('/'), files))
+
+
+    if filter_output:
+        filtered_files = []
+        file_name = file_name[:-4] + '_filtered.csv'
+        recordings = set()
+        r = re.compile('.*_animal_trial_.*')
+        for file in files:
+            dirs = file.split('/')
+            recording = list(filter(r.match, dirs))[0]
+            if os.path.basename(file) == 'capture-000000.mkv' and recording not in recordings:
+                recordings.add(recording) 
+                filtered_files.append(file)
+        files = filtered_files
+            
+
+
     result = check_for_midi(files)
     assert (len(files) == len(result))
 
@@ -108,8 +129,9 @@ def print_cfgs(args):
 def main():
     args = parse_args()
     print_cfgs(args)
-    get_mkv_files(args.indir, args.outdir, args.file_name)
+    get_mkv_files(args.indir, args.outdir, args.file_name, args.filter_output)
     
 
 if __name__ == '__main__':
     main()
+    

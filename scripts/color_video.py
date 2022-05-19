@@ -9,7 +9,8 @@ from mkv_extractor import TimesynchronizerPCPD, ExportConfig, Path as MkvPath
 # INPUT_DIR = "/data/input"
 # INPUT_DIR = "/media/lennart/Elements/211207_animal_trial_14/recordings/"
 # INPUT_DIR = "/media/lennart/Elements/211207_animal_trial_14/recordings/"
-INPUT_DIR = "/media/lennart/d25b2352-7a02-4b0d-ac1e-5fc60c083669/archive_atlas_or01/03_animal_trials/210914_animal_trial_03/recordings/"  # noqa
+# INPUT_DIR = "/media/lennart/d25b2352-7a02-4b0d-ac1e-5fc60c083669/archive_atlas_or01/03_animal_trials/210914_animal_trial_03/recordings/"  # noqa
+INPUT_DIR = "/mnt/atlas_4/03_animal_trials/211102_animal_trial_08/recordings/"
 EXPORT_DIR = "/data/export/"
 
 if __name__ == "__main__":
