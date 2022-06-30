@@ -193,7 +193,7 @@ namespace extract_mkv {
             if (m_export_config.export_rgbd && input_depth_image.is_valid() && input_color_image.is_valid()) {
                 m_transformation.process_rgbd(
                     input_depth_image, input_color_image.get_width_pixels(),
-                    input_color_image.get_height_pixels(), wrapper, m_output_directory, frame_counter
+                    input_color_image.get_height_pixels(), wrapper, m_output_directory, frame_counter, m_export_config.export_distorted
                 );
             }
 
@@ -360,7 +360,7 @@ namespace extract_mkv {
     void K4ATransformationContext::process_rgbd(k4a::image input_depth_image,
                       int color_image_width_pixels, int color_image_height_pixels,
                       std::shared_ptr<K4ADeviceWrapper> device_wrapper,
-                      fs::path output_directory, int frame_counter) {
+                      fs::path output_directory, int frame_counter, bool distort) {
 
         if (!(input_depth_image.is_valid())) {
             spdlog::warn("Export RGBD requires a valid depth image.");
@@ -375,9 +375,9 @@ namespace extract_mkv {
         if (!(transformed_depth_image.is_valid())) {
             spdlog::warn("Failed to transform RGBD image.");
         }
+        std::ostringstream s;
         std::ostringstream ss;
-        ss << std::setw(10) << std::setfill('0') << frame_counter << "_rgbd.tiff";
-        fs::path image_path = output_directory / ss.str();
+
         cv::Mat image_buffer = cv::Mat(cv::Size(color_image_width_pixels, color_image_height_pixels), CV_16UC1,
                                        const_cast<void *>(static_cast<const void *>(k4a_image_get_buffer(transformed_depth_image.handle()))),
                                        static_cast<size_t>(k4a_image_get_stride_bytes(transformed_depth_image.handle())));
@@ -388,20 +388,28 @@ namespace extract_mkv {
         cv::minMaxLoc(image_buffer, &minVal, &maxVal);
         spdlog::debug("RGBD min: {0}, max: {1}", minVal, maxVal);
         */
-        cv::Mat undistorted_image;
-        // undistort using color image rectify maps
-        /*cv::remap(image_buffer, undistorted_image, device_wrapper->rectify_maps.color_map_x,
-                  device_wrapper->rectify_maps.color_map_y, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
-        */
 
         // TODO: generalize this into configs
         // cv::resize(undistorted_image, out_image, cv::Size(512, 384));
         // cv::imwrite(image_path, undistorted_image);
         // cv::resize(undistorted_image, out_image, cv::Size(512, 384));
-        std::ostringstream s;
-        s << std::setw(10) << std::setfill('0') << frame_counter << "_distorted_rgbd.tiff";
-        image_path = output_directory / s.str();
-        cv::imwrite(image_path, image_buffer);
+
+        if (distort) {
+            s << std::setw(10) << std::setfill('0') << frame_counter << "_distorted_rgbd.tiff";
+            fs::path image_path = output_directory / s.str();
+            cv::imwrite(image_path, image_buffer);
+        }
+        else {
+            cv::Mat undistorted_image;
+            // undistort using color image rectify maps
+            cv::remap(image_buffer, undistorted_image, device_wrapper->rectify_maps.color_map_x,
+                    device_wrapper->rectify_maps.color_map_y, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
+            ss << std::setw(10) << std::setfill('0') << frame_counter << "_rgbd.tiff";
+            fs::path image_path = output_directory / ss.str();
+            cv::imwrite(image_path, undistorted_image);                
+        }
+       
+
     };
 
     void K4ATransformationContext::process_pointcloud(k4a::image input_color_image,

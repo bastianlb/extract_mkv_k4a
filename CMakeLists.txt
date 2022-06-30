@@ -125,7 +125,7 @@ install(TARGETS ${TARGET_NAME}
 
 # executable
 set(TARGET_NAME extract)
-add_executable(${TARGET_NAME} "${CMAKE_CURRENT_SOURCE_DIR}/src/mkvinfo.cpp")
+add_executable(${TARGET_NAME} "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp")
 
 set_property(TARGET ${TARGET_NAME} PROPERTY CXX_STANDARD 17)
 set_target_properties(${TARGET_NAME} PROPERTIES LINKER_LANGUAGE CXX)

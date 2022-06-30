@@ -339,7 +339,7 @@ namespace extract_mkv {
           feed->m_color_image_width, feed->m_color_image_height,
           feed->m_device_wrapper,
           feed->get_output_dir(),
-          frame_id
+          frame_id, m_export_config.export_distorted
       );
     }
 

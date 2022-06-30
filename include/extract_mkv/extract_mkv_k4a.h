@@ -26,7 +26,7 @@ namespace extract_mkv {
         public:
             K4ATransformationContext() = default;
             void init_transformation(k4a::calibration);
-            void process_rgbd(k4a::image, int, int, std::shared_ptr<K4ADeviceWrapper>, fs::path, int);
+            void process_rgbd(k4a::image, int, int, std::shared_ptr<K4ADeviceWrapper>, fs::path, int, bool);
             void process_pointcloud(k4a::image, k4a::image, std::shared_ptr<K4ADeviceWrapper>, fs::path, int, bool align_clouds=false);
             k4a::transformation m_transformation;
     };
