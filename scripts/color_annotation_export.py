@@ -10,10 +10,10 @@ from mkv_extractor import TimesynchronizerPCPD, ExportConfig, Path as MkvPath
 # "/atlasarchive/atlas/03_animal_trials/210824_animal_trial_02/"
 
 # INPUT_DIR = "/data/input"
+
 INPUT_DIR1 = "/media/narvis/Elements/03_animal_trials/"
 INPUT_DIR2 = "/media/narvis/atlas_4/03_animal_trials/"
 EXPORT_DIR = "/data/datasets/daniel_pointcloud_export/"
-
 
 if __name__ == "__main__":
     logging.basicConfig(filename="annotation_export.log",
@@ -29,6 +29,7 @@ if __name__ == "__main__":
     logging.info(os.listdir(INPUT_DIR1))
 
     set_log_level("info")
+
 
     annotations = pd.read_csv("../daniel_export.csv", parse_dates=["Start", "End"],
                               usecols=["Trial", "filekey", "Phase", "Start", "End"],
