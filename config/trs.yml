@@ -1,0 +1,25 @@
+mode: PCPD
+record:
+  # TRS start / end
+  #start_ts: 1637058796787000000
+  #end_ts: 1637059450949000000
+  skip_frames: 1
+  input_dir: "/media/narvis/Elements/03_animal_trials/211116_animal_trial_10/recordings/recordings_1611_recording_01/"
+  feeds:
+    - "cn01/"
+    - "cn02/"
+    - "cn03/"
+    - "cn04/"
+  output:
+    # - timestamp
+    - color
+      # - color_video
+      # - depth
+    # - infrared
+    - rgbd
+    # - pointcloud
+    # - align_clouds
+    # - bodypose
+  output_dir: "/data/debug/"
+timesync: true
+seek: false

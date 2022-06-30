@@ -180,6 +180,8 @@ namespace extract_mkv {
             m_frame_map[frame_id]->feed_data_map[feed->get_feed_id()] = processed_data;
             m_frame_map_lock.unlock();
           }
+          process_feed(feed, processed_data, frame_id);
+          /*
           std::shared_future<bool> task_future = m_thread_pool.submit(
                [=] {
                  // TODO: need a way of synchronizing and waiting until we can delete
@@ -189,6 +191,7 @@ namespace extract_mkv {
                  processed_data->lock.unlock();
                }
           );
+          */
         }
         spdlog::debug("Submitting monitor task {0}", frame_id);
       }
@@ -317,10 +320,10 @@ namespace extract_mkv {
 
     // spdlog::trace("K4AWrapper pointer count, beginning of advance: {0}", k4a_wrapper.use_count());
     if (m_export_config.export_color) {
-        process_color_raw(color_image,
-                          feed->m_device_wrapper,
-                          feed->get_output_dir(),
-                          frame_id);
+        process_color(k4a_wrapper->capture_handle.get_color_image(),
+                      feed->m_device_wrapper,
+                      feed->get_output_dir(),
+                      frame_id, m_export_config.export_distorted);
     }
 
     if (m_export_config.export_infrared) {
@@ -336,16 +339,17 @@ namespace extract_mkv {
           feed->m_color_image_width, feed->m_color_image_height,
           feed->m_device_wrapper,
           feed->get_output_dir(),
-          frame_id
+          frame_id, m_export_config.export_distorted
       );
     }
 
     if (m_export_config.export_pointcloud) {
-      process_pointcloud(k4a_wrapper->capture_handle.get_color_image(),
-                         k4a_wrapper->capture_handle.get_depth_image(),
-                         feed->m_device_wrapper,
-                         feed->get_output_dir(),
-                         frame_id);
+      feed->m_transformation.process_pointcloud(
+          k4a_wrapper->capture_handle.get_color_image(),
+          k4a_wrapper->capture_handle.get_depth_image(),
+          feed->m_device_wrapper,
+          feed->get_output_dir(),
+          frame_id);
     }
 
     if (m_export_config.export_bodypose) {

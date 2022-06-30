@@ -7,5 +7,6 @@ tmp/
 .ccls-cache/
 test_system/
 ./.ipynb_checkpoints/*
-.vscode/
-output/
+**/output/*
+**/.vscode/*
+

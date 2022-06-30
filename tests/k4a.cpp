@@ -167,15 +167,16 @@ TEST(HelloTest, BasicAssertions) {
   k4a::calibration k4a_calib;
   getK4Acalib(k4a_calib);
   //device_wrapper->calibration = k4a_calib;
+  //TODO: need to change to use transformation context
 
   /*extract_mkv::process_rgbd(k4a_wrapper->capture_handle.get_depth_image(),
                             col_w, col_h,
                             device_wrapper,
                             output_dir, 0);
-  */
   extract_mkv::process_pointcloud(k4a_wrapper->capture_handle.get_color_image(),
                                   k4a_wrapper->capture_handle.get_depth_image(),
                                   device_wrapper,
                                   output_dir,
                                   0);
+  */
 }

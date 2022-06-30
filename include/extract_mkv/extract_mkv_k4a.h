@@ -17,6 +17,19 @@ namespace extract_mkv {
 
     void print_raw_calibration(k4a_calibration_t&);
     RectifyMaps process_calibration(k4a_calibration_t, fs::path);
+    struct K4ADeviceWrapper {
+        RectifyMaps rectify_maps;
+        k4a::calibration calibration;
+        Eigen::Affine3f m_extrinsics = Eigen::Affine3f::Identity();
+    };
+    class K4ATransformationContext {
+        public:
+            K4ATransformationContext() = default;
+            void init_transformation(k4a::calibration);
+            void process_rgbd(k4a::image, int, int, std::shared_ptr<K4ADeviceWrapper>, fs::path, int, bool);
+            void process_pointcloud(k4a::image, k4a::image, std::shared_ptr<K4ADeviceWrapper>, fs::path, int, bool align_clouds=false);
+            k4a::transformation m_transformation;
+    };
 
     class K4AFrameExtractor {
         public:
@@ -36,6 +49,7 @@ namespace extract_mkv {
             std::mutex m_worker_lock;
             Eigen::Affine3f m_extrinsics = Eigen::Affine3f::Identity();
             k4a::calibration m_calibration;
+            K4ATransformationContext m_transformation;
 
         protected:
             k4a::playback m_dev;
@@ -50,22 +64,12 @@ namespace extract_mkv {
             RectifyMaps m_rectify_maps;
             std::chrono::microseconds m_timestamp_offset;
     };
-    struct K4ADeviceWrapper {
-        RectifyMaps rectify_maps;
-        k4a::calibration calibration;
-        Eigen::Affine3f m_extrinsics = Eigen::Affine3f::Identity();
-    };
     int process_depth(k4a::image, std::shared_ptr<K4ADeviceWrapper>, fs::path, int);
-    int process_color(k4a::image, std::shared_ptr<K4ADeviceWrapper>, fs::path, int);
+    /**
+     * bool indicates whether to export distorted or undistorted images 
+     */
+    int process_color(k4a::image, std::shared_ptr<K4ADeviceWrapper>, fs::path, int, bool);
     void process_ir(k4a::image, std::shared_ptr<K4ADeviceWrapper>, fs::path, int);
-    void process_pointcloud(k4a::image, k4a::image, std::shared_ptr<K4ADeviceWrapper>, fs::path, int, bool align_clouds=false);
     void process_pose(std::shared_ptr<K4ADeviceWrapper>, fs::path, int);
     void compute_undistortion_intrinsics();
-    class K4ATransformationContext {
-        public:
-            K4ATransformationContext() = default;
-            void init_transformation(k4a::calibration);
-            void process_rgbd(k4a::image, int, int, std::shared_ptr<K4ADeviceWrapper>, fs::path, int);
-            k4a::transformation m_transformation;
-    };
 }
