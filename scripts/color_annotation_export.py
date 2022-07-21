@@ -1,6 +1,7 @@
 import os
 import logging
 import pandas as pd
+import glob
 
 from datetime import timedelta
 
@@ -12,12 +13,10 @@ from mkv_extractor import TimesynchronizerPCPD, ExportConfig, Path as MkvPath
 # INPUT_DIR = "/data/input"
 # INPUT_DIR = "/media/narvis/Elements/03_animal_trials/"
 # INPUT_DIR = "/media/narvis/Elements/03_animal_trials/"
-INPUT_DIR = "/mnt/recordings/03_animal_trials/"
+
+INPUT_DIRS = ["/mnt/atlas_1/03_animal_trials/", "/mnt/atlas_2/03_animal_trials/"]
 EXPORT_DIR = "/archive/2605_di_export/"
 
-INPUT_DIR1 = "/media/narvis/Elements/03_animal_trials/"
-INPUT_DIR2 = "/media/narvis/atlas_4/03_animal_trials/"
-EXPORT_DIR = "/data/datasets/daniel_pointcloud_export/"
 
 if __name__ == "__main__":
     logging.basicConfig(filename="annotation_export.log",
@@ -30,11 +29,13 @@ if __name__ == "__main__":
     # add the handler to the root logger
     logging.getLogger('').addHandler(console)
     logging.info("Color Frame Export")
-    logging.info(os.listdir(INPUT_DIR1))
+    for inp_dir in INPUT_DIRS:
+        logging.info(os.listdir(inp_dir))
+
 
     set_log_level("info")
 
-    annotations = pd.read_csv("../daniel_export.csv", parse_dates=["Start", "End"],
+    annotations = pd.read_csv("../annotations_processed.csv", parse_dates=["Start", "End"],
                               usecols=["Trial", "filekey", "Phase", "Start", "End"],
                               dtype={"Trial": str, "filekey": str, "Phase": str, "Start": str,
                                      "End": str},
@@ -42,7 +43,13 @@ if __name__ == "__main__":
 
     for i, trial in annotations.iterrows():
         recording_dir = trial["Trial"]
-        if recording_dir not in os.listdir(INPUT_DIR):
+
+        # check in which input dir the trial is
+        INPUT_DIR = next((inp_dir for inp_dir in INPUT_DIRS 
+            if os.path.exists(os.path.join(inp_dir, recording_dir))), None)
+
+
+        if INPUT_DIR is None:
             logging.info("Trial not found: " + recording_dir)
             continue
 
@@ -51,11 +58,25 @@ if __name__ == "__main__":
         export_path = os.path.join(EXPORT_DIR, recording_dir, trial["Phase"])
         recording_name = "recordings_" + recording_dir[4:6] + recording_dir[2:4] + "_recording_" + str(trial["filekey"])
         dir_path = os.path.join(trial_path, recording_name)
+
+        export_config = ExportConfig()
+        # export_config.export_color = True
+        export_config.export_pointcloud = True
+        export_config.align_clouds = True
+        export_config.timesync = True
+
         if "blooper" in trial["Phase"]:
             continue
+        
         if os.path.exists(export_path):
-            logging.warning(f"Skipping recording {export_path}, it exists .. continuing")
-            continue
+            # check for specific files instead of whether the directory exists
+            if export_config.export_color and len(glob.glob(export_path + '/**/*.jpg', recursive=True)) > 0:
+                logging.warning(f"Skipping recording {export_path}, color images already exist .. continuing")
+                continue
+            if export_config.export_pointcloud and len(glob.glob(export_path + '/**/*.ply', recursive=True)) > 0:
+                logging.warning(f"Skipping recording {export_path}, point clouds already exist .. continuing")
+                continue
+
         if not os.path.exists(dir_path):
             logging.warning(f"Skipping recording {dir_path}, dir path not found.")
             continue
@@ -68,10 +89,7 @@ if __name__ == "__main__":
             # use only the first 15 minutes right now, don't export forever
             end = start + timedelta(minutes=15)
 
-        export_config = ExportConfig()
-        export_config.export_color = True
-        export_config.export_pointcloud = True
-        export_config.timesync = True
+
         # only export 1FPS
         export_config.skip_frames = 5
         export_config.start_ts = timedelta(microseconds=start.value // 1000)
