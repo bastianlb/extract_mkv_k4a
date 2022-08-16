@@ -198,7 +198,7 @@ namespace extract_mkv {
             }
 
             if (m_export_config.export_pointcloud && input_depth_image.is_valid() && input_color_image.is_valid()) {
-                m_transformation.process_pointcloud(input_color_image, input_depth_image, wrapper, m_output_directory, frame_counter);
+                m_transformation.process_pointcloud(input_color_image, input_depth_image, wrapper, m_output_directory, frame_counter, m_export_config.align_clouds);
             }
 
             if (m_export_config.export_bodypose && input_depth_image.is_valid() && input_ir_image.is_valid()) {
