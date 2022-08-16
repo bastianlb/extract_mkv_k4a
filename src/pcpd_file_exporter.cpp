@@ -367,7 +367,8 @@ namespace extract_mkv {
           k4a_wrapper->capture_handle.get_depth_image(),
           feed->m_device_wrapper,
           feed->get_output_dir(),
-          frame_id);
+          frame_id,
+          m_export_config.align_clouds);
     }
 
     if (m_export_config.export_bodypose) {
@@ -584,6 +585,8 @@ namespace extract_mkv {
     m_device_wrapper->calibration = m_calibration;
     RectifyMaps rectify_maps = process_calibration(m_calibration, m_output_dir);
     m_device_wrapper->rectify_maps = rectify_maps;
+    // Duplicating the extrinsics from feed to the device wrapper of the feed
+    m_device_wrapper->m_extrinsics = this->m_extrinsics;
     spdlog::info("Done initializing device calibration");
   }
 
