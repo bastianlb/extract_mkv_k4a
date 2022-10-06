@@ -98,6 +98,7 @@ namespace extract_mkv {
       std::vector<std::shared_ptr<PCPDFileChannel>> m_input_feeds;
       uint8_t m_recording_fps{30};
       fs::path m_output_dir;
+      fs::path m_timestamp_path;
       PCPDVideoWriter m_video_writer;
       CUcontext m_cu_context;
   };
