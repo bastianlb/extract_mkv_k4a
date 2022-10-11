@@ -60,15 +60,22 @@ namespace extract_mkv {
 
   void TimesynchronizerPCPD::initialize_feeds(std::vector<fs::path> input_paths, fs::path output_directory) {
       std::string export_name;
+      m_timestamp_path = fs::path(output_directory) / "timestamps.csv";
+      std::ofstream ts_file(m_timestamp_path);
+      // construct header of timestamp file
+      ts_file << "frame_id,";
       for(auto input_dir : input_paths) {
           // TODO: this is annoying.. as dir has to end in /. make more robust?
           std::string feed_name = input_dir.parent_path().filename().string();
+          ts_file << feed_name;
+          ts_file << ",";
           export_name = input_dir.parent_path().parent_path().filename().string();
           spdlog::info("Initializing {0}", feed_name);
           // append the appropriate directory onto the output path, i.e. cn01 cn02 cn03..
           auto frame_extractor = std::make_shared<PCPDFileChannel>(input_dir, output_directory / feed_name, feed_name, m_export_config, m_cu_context);
           m_input_feeds.push_back(frame_extractor);
       }
+      ts_file << "\n";
 
       spdlog::info("Finished initializing feeds, beginning frame export");
       if (m_export_config.export_color_video) {
@@ -80,6 +87,7 @@ namespace extract_mkv {
       int fps_mult = 10;
       float fpns = (1 / m_input_feeds[0]->m_recording_fps) * pow(10, 6);
       m_sync_window = std::chrono::microseconds(static_cast<uint64_t>(SYNC_WINDOW * fpns));
+      ts_file.close();
   };
 
   void TimesynchronizerPCPD::run() {
@@ -92,6 +100,8 @@ namespace extract_mkv {
           monitor_frame_map();
       });
 
+      std::ofstream ts_file;
+      ts_file.open(m_timestamp_path, std::ios_base::app); //append instead of overwrite
       while(m_frames_exported < m_export_config.max_frames_exported && m_is_running) {
         spdlog::debug("Exporting frame {0} of frames {1}", m_frames_exported, m_export_config.max_frames_exported);
         for (auto feed : m_input_feeds) {
@@ -152,6 +162,7 @@ namespace extract_mkv {
         }
 
         if (m_thread_pool.get_tasks_total() > MAX_RUNNING_JOBS) {
+          // TODO: this is a bit lazy.. should be in a loop, but don't want to deadlock for some reason..
           spdlog::debug("Total tasks qeued: {0}. sleeping", m_thread_pool.get_tasks_total());
           std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         }
@@ -180,6 +191,8 @@ namespace extract_mkv {
             m_frame_map[frame_id]->feed_data_map[feed->get_feed_id()] = processed_data;
             m_frame_map_lock.unlock();
           }
+          ts_file << std::to_string(feed->m_last_depth_ts.count());
+          ts_file << ",";
           process_feed(feed, processed_data, frame_id);
           /*
           std::shared_future<bool> task_future = m_thread_pool.submit(
@@ -193,6 +206,8 @@ namespace extract_mkv {
           );
           */
         }
+        ts_file << "\n";
+        std::flush(ts_file);
         spdlog::debug("Submitting monitor task {0}", frame_id);
       }
       // process remaining frames
@@ -257,6 +272,9 @@ namespace extract_mkv {
     assert(k4a_wrapper->capture_handle != nullptr);
 
     uint64_t depth_ts_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(data->timestamp_us).count();
+
+    // export timestamp
+
     if (m_export_config.process_depth()) {
       // depth needs to be set on wrapper
       uint8 bits_per_element = 16;

@@ -408,8 +408,6 @@ namespace extract_mkv {
             fs::path image_path = output_directory / ss.str();
             cv::imwrite(image_path, undistorted_image);                
         }
-       
-
     };
 
     void K4ATransformationContext::process_pointcloud(k4a::image input_color_image,

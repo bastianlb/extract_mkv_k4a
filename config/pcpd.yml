@@ -4,7 +4,7 @@ record:
   # end_ts: 1632805075983893801
   skip_frames: 1
   max_frame_count: 50
-  input_dir: "/media/narvis/atlas_4/03_animal_trials/211102_animal_trial_08/recordings/recordings_0211_recording_01/"
+  input_dir: "/mnt/atlas_1/03_animal_trials/211102_animal_trial_08/recordings/recordings_0211_recording_01/"
   feeds:
     - "cn01/"
     - "cn02/"
@@ -17,7 +17,7 @@ record:
       # - depth
     # - infrared
     # - rgbd
-    - pointcloud
+    # - pointcloud
     # - align_clouds
     # - bodypose
   output_dir: "/data/atlas_export/"
