@@ -16,6 +16,7 @@
 #include "extract_mkv/extract_mkv_k4a.h"
 #include "extract_mkv/export.h"
 #include "extract_mkv/transformation_helpers.h"
+
 #include "pcpd/processing/cuda/detail/error_handling.cuh"
 #include "pcpd/processing/cuda/detail/hardware.cuh"
 #include "pcpd/processing/cuda/detail/developer_tools.cuh"
@@ -29,12 +30,13 @@ using namespace pcpd::record;
 using namespace rttr;
 
 const int MIN_FILESIZE_BYTES = 1300*1000*1000; // 100 MB
-const float SYNC_WINDOW = 0.8;
+const float SYNC_WINDOW = 0.2;
 const int MAX_RUNNING_JOBS = std::thread::hardware_concurrency() * 2;
 
 std::string COLOR_TRACK_KEY = "COLOR";
 std::string DEPTH_TRACK_KEY = "DEPTH";
 std::string IR_TRACK_KEY = "INFRARED";
+std::string TIMESTAMP_TRACK_KEY = "DEPTH_TIMESTAMPS";
 
 namespace extract_mkv {
 
@@ -246,6 +248,11 @@ namespace extract_mkv {
       if (feed->pcpd_extract_infrared(feed->m_processed_data->ir_image, image_timestamp, false)) {
         ts_exported = true;
       }
+    }
+
+    // TODO: this could be under an if statement: if export_config.use_kinect_device_timestamps
+    if (feed->pcpd_extract_timestamps(image_timestamp)) {
+        spdlog::debug("Got timestamp {0}", image_timestamp.count());
     }
 
     if (ts_exported) {
@@ -482,6 +489,8 @@ namespace extract_mkv {
       m_loader->addTrack(DEPTH_TRACK_KEY);
     if (m_export_config.process_infrared())
       m_loader->addTrack(IR_TRACK_KEY);
+    // always add the timestamps track
+    m_loader->addTrack(TIMESTAMP_TRACK_KEY);
     // read info from first filepath
     load_mkv_info(fps[0]);
     // need to call this last.. once we have calibration, etc
@@ -690,6 +699,27 @@ namespace extract_mkv {
         cv::imwrite(fp, image);
       }
     }
+    return true;
+  }
+
+  bool PCPDFileChannel::pcpd_extract_timestamps(std::chrono::microseconds& timestamp) {
+    uint8 bits_per_element = 16;
+    MkvDataBlock2 block;
+    if(!m_loader->getNextDataBlock(block, TIMESTAMP_TRACK_KEY)) {
+      spdlog::error("Unable to get next timestamp block {0}..", m_frame_counter);
+      return false;
+    }
+    kj::ArrayPtr<kj::byte> arr(&block.data->data_block.front(),
+                               static_cast<size_t>(block.data->data_block.size()));
+    kj::ArrayInputStream stream(arr);
+    capnp::InputStreamMessageReader reader(stream);
+    auto data = reader.getRoot<artekmed::schema::TimestampEntry>();
+    std::chrono::nanoseconds device_timestamp{data.getDeviceTimestamp()};
+    timestamp = std::chrono::duration_cast<std::chrono::microseconds>(device_timestamp);
+    // kj::ArrayPtr<kj::byte> bufferPtr = kj::arrayPtr(block.data->data_block, block.data->data_block.size());
+    // kj::ArrayInputStream ins (bufferPtr);
+    // ::capnp::InputStreamMessageReader message(ins);
+
     return true;
   }
 
