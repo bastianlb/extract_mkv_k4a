@@ -43,6 +43,7 @@ namespace extract_mkv {
       bool pcpd_extract_color(cv::cuda::GpuMat&, std::chrono::microseconds&, bool write=false);
       bool pcpd_extract_depth(cv::Mat&, std::chrono::microseconds&, bool write=false);
       bool pcpd_extract_infrared(cv::Mat&, std::chrono::microseconds&, bool write=false);
+      bool pcpd_extract_timestamps(std::chrono::microseconds&);
       void load_mkv_info(std::string);
       void initialize();
       int get_feed_id() {
