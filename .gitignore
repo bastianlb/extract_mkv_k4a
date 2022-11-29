@@ -6,6 +6,7 @@ cmake/*
 tmp/
 .ccls-cache/
 test_system/
+.cache/
 ./.ipynb_checkpoints/*
 **/output/*
 **/.vscode/*
