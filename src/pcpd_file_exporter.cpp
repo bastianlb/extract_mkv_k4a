@@ -1,3 +1,4 @@
+#include <chrono>
 #include <thread>
 #include <string>
 #include <fstream>
@@ -716,6 +717,11 @@ namespace extract_mkv {
     auto data = reader.getRoot<artekmed::schema::TimestampEntry>();
     std::chrono::nanoseconds device_timestamp{data.getDeviceTimestamp()};
     timestamp = std::chrono::duration_cast<std::chrono::microseconds>(device_timestamp);
+    auto offset = std::chrono::nanoseconds{block.timestamp_offset};
+    assert(offset.count() > 0);
+    timestamp = timestamp + std::chrono::duration_cast<std::chrono::microseconds>(offset);
+    std::cout << timestamp.count() << std::endl;
+
     // kj::ArrayPtr<kj::byte> bufferPtr = kj::arrayPtr(block.data->data_block, block.data->data_block.size());
     // kj::ArrayInputStream ins (bufferPtr);
     // ::capnp::InputStreamMessageReader message(ins);
