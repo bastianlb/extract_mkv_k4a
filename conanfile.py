@@ -69,7 +69,7 @@ class ExportMKVConan(ConanFile):
             self.requires("pybind11/2.7.1@camposs/stable")
         if self.options.with_pcpd:
             self.requires("Boost/1.75.0-r2@camposs/stable")
-            self.requires("pcl/1.11.1-r3@camposs/stable")
+            self.requires("pcl/1.12.1@camposs/stable")
             self.requires("rapidjson/1.1.0")
             self.requires("cuda_dev_config/[>=2.0]@camposs/stable")
             self.requires("ringbuffer/0.2.7@artekmed/stable")
