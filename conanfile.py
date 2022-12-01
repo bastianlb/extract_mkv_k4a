@@ -23,7 +23,7 @@ class ExportMKVConan(ConanFile):
     }
 
     requires = (
-        "opencv/4.5.1@camposs/stable",
+        "opencv/4.5.5@camposs/stable",
         "eigen/3.3.9-r1@camposs/stable",
         "magnum/2020.06@camposs/stable",
         "corrade/2020.06@camposs/stable",
