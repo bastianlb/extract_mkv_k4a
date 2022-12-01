@@ -720,7 +720,7 @@ namespace extract_mkv {
     auto offset = std::chrono::nanoseconds{block.timestamp_offset};
     assert(offset.count() > 0);
     timestamp = timestamp + std::chrono::duration_cast<std::chrono::microseconds>(offset);
-    std::cout << timestamp.count() << std::endl;
+    spdlog::debug("Recieved timestamp: {0}", timestamp.count());
 
     // kj::ArrayPtr<kj::byte> bufferPtr = kj::arrayPtr(block.data->data_block, block.data->data_block.size());
     // kj::ArrayInputStream ins (bufferPtr);
