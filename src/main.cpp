@@ -168,7 +168,7 @@ namespace Magnum {
           else if (it->as<std::string>() == "bodypose")
             m_export_config.export_bodypose = true;
           else if (it->as<std::string>() == "align_clouds")
-            m_export_config.align_clouds= true;
+            m_export_config.align_clouds = true;
           else
             spdlog::error("Invalid export type: [{0}].", it->as<std::string>());
         }
@@ -204,8 +204,15 @@ namespace Magnum {
           m_input_feeds.push_back(input_feed);
         }
 
-        m_timesync = config["timesync"].as<bool>();
+        if (config["timesync"]) {
+          m_timesync = config["timesync"].as<bool>();
+          m_export_config.timesync = m_timesync;
+        }
+        if (config["override_timestamps"]) {
+          m_export_config.override_timestamps = config["override_timestamps"].as<bool>();
+        }
         m_enable_seek = config["seek"].as<bool>();
+
 
         spdlog::info("Successfully parsed configuration.");
     }

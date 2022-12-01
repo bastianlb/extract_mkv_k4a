@@ -31,7 +31,7 @@ using namespace pcpd::record;
 using namespace rttr;
 
 const int MIN_FILESIZE_BYTES = 1300*1000*1000; // 100 MB
-const float SYNC_WINDOW = 0.2;
+const float SYNC_WINDOW = 0.8;
 const int MAX_RUNNING_JOBS = std::thread::hardware_concurrency() * 2;
 
 std::string COLOR_TRACK_KEY = "COLOR";
