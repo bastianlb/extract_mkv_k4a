@@ -50,6 +50,10 @@ if(WITH_PCPD)
     else()
       message("Linking PCPD...")
     endif ()
+    if(NOT DEFINED PCPD_BUILD_DIR)
+      set(PCPD_BUILD_DIR ${PCPD_DIR}/build/)
+    endif()
+
     add_compile_definitions(WITH_PCPD)
 
     enable_language(CUDA)
@@ -70,13 +74,13 @@ if(WITH_PCPD)
     include_directories(${PCPD_DIR}/include/pcpd)
     include_directories(${PCPD_DIR}/include/pcpd/artekmed)
     include_directories(${PCPD_DIR}/include/pcpd/artekmed/schema)
-    include_directories(${PCPD_DIR}/build/include)
     include_directories("${CUDA_INCLUDE_DIRS}")
-    link_directories(${PCPD_DIR}/build/lib)
+    include_directories(${PCPD_BUILD_DIR}/include)
+    link_directories(${PCPD_BUILD_DIR}/lib)
 
     add_library(ringbuffer STATIC IMPORTED)
     set_property(TARGET ringbuffer PROPERTY IMPORTED_LOCATION
-      ${PCPD_DIR}/build/lib/libringbuffer.so)
+      ${PCPD_BUILD_DIR}/lib/libringbuffer.so)
 
     message("Directories linked...")
 
