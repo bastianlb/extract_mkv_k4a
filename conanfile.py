@@ -23,14 +23,14 @@ class ExportMKVConan(ConanFile):
     }
 
     requires = (
-        "opencv/4.5.1@camposs/stable",
+        "opencv/4.5.5@camposs/stable",
         "eigen/3.3.9-r1@camposs/stable",
         "magnum/2020.06@camposs/stable",
         "corrade/2020.06@camposs/stable",
         "kinect-azure-sensor-sdk/1.4.1-r1@camposs/stable",
         "kinect-azure-bodytracking-sdk/1.1.0@vendor/stable",
         "bzip2/1.0.8@conan/stable",
-        "zlib/1.2.11-r1@camposs/stable",  # ffmpeg version needs to be overriden
+        "zlib/1.2.13@camposs/stable",  # ffmpeg version needs to be overriden
         "fmt/8.0.1",
         "spdlog/1.9.1",
         "yaml-cpp/0.6.3",
@@ -68,7 +68,7 @@ class ExportMKVConan(ConanFile):
             self.requires("python_dev_config/[>=1.0]@camposs/stable")
             self.requires("pybind11/2.7.1@camposs/stable")
         if self.options.with_pcpd:
-            self.requires("Boost/1.75.0-r2@camposs/stable")
+            self.requires("Boost/1.79.0@camposs/stable")
             self.requires("pcl/1.12.1@camposs/stable")
             self.requires("rapidjson/1.1.0")
             self.requires("cuda_dev_config/[>=2.0]@camposs/stable")
