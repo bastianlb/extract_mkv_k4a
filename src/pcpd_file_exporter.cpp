@@ -252,7 +252,7 @@ namespace extract_mkv {
     }
 
     // TODO: this could be under an if statement: if export_config.use_kinect_device_timestamps
-    if (feed->pcpd_extract_timestamps(image_timestamp)) {
+    if (m_export_config.override_timestamps && feed->pcpd_extract_timestamps(image_timestamp)) {
         spdlog::debug("Got timestamp {0}", image_timestamp.count());
     }
 

@@ -1,9 +1,11 @@
 mode: PCPD
 record:
-  # start_ts: 1632804955682321998
-  # end_ts: 1632805075983893801
+  # 2021-11-02 03:40:00
+  start_ts: 1635824400000000000
+  # 2021-11-02 03:50:00
+  end_ts: 1635825000000000000
   skip_frames: 5
-  max_frame_count: 50
+  max_frame_count: 500
   input_dir: "/mnt/atlas_1/03_animal_trials/211102_animal_trial_08/recordings/recordings_0211_recording_01/"
   feeds:
     - "cn01/"
@@ -22,4 +24,5 @@ record:
     # - bodypose
   output_dir: "/data/atlas_export/"
 timesync: true
+override_timestamps: true
 seek: false

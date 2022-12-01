@@ -43,6 +43,7 @@ namespace extract_mkv {
       .def_readwrite("export_pointcloud", &ExportConfig::export_pointcloud)
       .def_readwrite("export_color_video", &ExportConfig::export_color_video)
       .def_readwrite("align_clouds", &ExportConfig::align_clouds)
+      .def_readwrite("override_timestamps", &ExportConfig::override_timestamps)
       .def_readwrite("timesync", &ExportConfig::timesync)
       .def_readwrite("export_extrinsics", &ExportConfig::export_extrinsics)
       .def_readwrite("max_frames_exported", &ExportConfig::max_frames_exported)
