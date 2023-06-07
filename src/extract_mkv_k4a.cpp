@@ -254,7 +254,7 @@ namespace extract_mkv {
                 image_path = output_directory / s.str();
                 cv::Mat image;
                 image_buffer.convertTo(image, CV_8UC1);
-                cv::imwrite(image_path, image);
+                // cv::imwrite(image_path, image);
             } else {
                 spdlog::warn("Received depth frame with unexpected format: {0}", input_depth_image.get_format());
                 throw MissingDataException();

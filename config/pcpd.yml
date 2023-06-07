@@ -1,12 +1,10 @@
 mode: PCPD
 record:
-  # 2021-11-02 03:40:00
-  start_ts: 1635824400000000000
-  # 2021-11-02 03:50:00
-  end_ts: 1635825000000000000
+  start_ts: 1637639393835000000 
+  end_ts: 1637639483132000000
   skip_frames: 5
   max_frame_count: 500
-  input_dir: "/mnt/atlas_1/03_animal_trials/211102_animal_trial_08/recordings/recordings_0211_recording_01/"
+  input_dir: "/mnt/recordings/03_animal_trials_to_upload/211123_animal_trial_11/recordings/recordings_2311_recording_01/"
   feeds:
     - "cn01/"
     - "cn02/"
@@ -16,13 +14,13 @@ record:
     - timestamp
     - color
     # - color_video
-      # - depth
+    # - depth
     # - infrared
     # - rgbd
-    - pointcloud
+    # - pointcloud
     # - align_clouds
     # - bodypose
-  output_dir: "/data/atlas_export/"
+  output_dir: "/archive/230123_pointcloud_export/"
 timesync: true
-override_timestamps: true
+  # override_timestamps: true
 seek: false

@@ -31,7 +31,7 @@ namespace extract_mkv {
         bool export_bodypose{false};
         bool export_color_video{false};
         bool export_distorted{false};
-        bool override_timestamps{true};
+        bool override_timestamps{false};
         bool timesync{true};
         uint64_t max_frames_exported{std::numeric_limits<std::uint64_t>::max()};
         nanoseconds start_ts{0};

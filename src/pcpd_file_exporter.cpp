@@ -196,8 +196,7 @@ namespace extract_mkv {
           }
           ts_file << std::to_string(feed->m_last_depth_ts.count());
           ts_file << ",";
-          process_feed(feed, processed_data, frame_id);
-          /*
+          // process_feed(feed, processed_data, frame_id);
           std::shared_future<bool> task_future = m_thread_pool.submit(
                [=] {
                  // TODO: need a way of synchronizing and waiting until we can delete
@@ -207,7 +206,6 @@ namespace extract_mkv {
                  processed_data->lock.unlock();
                }
           );
-          */
         }
         ts_file << "\n";
         std::flush(ts_file);
@@ -461,7 +459,7 @@ namespace extract_mkv {
 
     std::vector<std::string> fps{filepaths.begin(), filepaths.end()};
     if (fps.empty()) {
-      spdlog::warn("No filepaths found for feed {0}", m_feed_name);
+      spdlog::warn("No filepaths found for feed {0} directory {1}", m_feed_name, input_dir);
     } else {
       for (auto &fp : fps) {
         spdlog::info(fp);
@@ -472,7 +470,9 @@ namespace extract_mkv {
     spdlog::info("Setting start time {0} and end time {1} for channel {2}", export_config.start_ts.count(), export_config.end_ts.count(), m_feed_name);
     // Subtract offset for decoder.. bgroup size should be 5. otherwise images come out with artifacts.
     MkvTrackLoaderConfig trackloader_config{};
-    trackloader_config.start_timestamp_offset_ns = export_config.start_ts.count() - 5 * ns_per_frame;
+    if (export_config.start_ts.count() > 0) {
+      trackloader_config.start_timestamp_offset_ns = export_config.start_ts.count() - 5 * ns_per_frame;
+    }
     trackloader_config.end_timestamp_offset_ns = export_config.end_ts.count();
     trackloader_config.file_paths = fps;
     trackloader_config.nth_frame = 1;
